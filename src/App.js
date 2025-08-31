@@ -1,24 +1,30 @@
-import logo from './logo.svg';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+
+// Import Framework7 layout and components
+import AppLayout from './components/Layout/AppLayout';
+import SimpleDashboard from './components/Dashboard/SimpleDashboard';
+import SimpleAddEntry from './components/AddEntry/SimpleAddEntry';
+import SimpleAddAdvance from './components/AddAdvance/SimpleAddAdvance';
+import SimpleReports from './components/Reports/SimpleReports';
+import SimpleSettings from './components/Settings/SimpleSettings';
+
+// Import custom styles
 import './App.css';
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <Router>
+      <AppLayout>
+        <Routes>
+          <Route path="/" element={<SimpleDashboard />} />
+          <Route path="/add-entry" element={<SimpleAddEntry />} />
+          <Route path="/add-advance" element={<SimpleAddAdvance />} />
+          <Route path="/reports" element={<SimpleReports />} />
+          <Route path="/settings" element={<SimpleSettings />} />
+        </Routes>
+      </AppLayout>
+    </Router>
   );
 }
 

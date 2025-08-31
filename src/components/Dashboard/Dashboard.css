@@ -1,0 +1,342 @@
+/* Dashboard Specific Styles */
+
+.dashboard-container {
+  padding: 0;
+  margin: 0;
+}
+
+/* Welcome Card */
+.welcome-card {
+  margin: 16px;
+  border-radius: 20px;
+  background: var(--gradient-primary);
+  color: white;
+  box-shadow: var(--shadow-elevated);
+}
+
+.welcome-content {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.welcome-content h2 {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+  color: white;
+}
+
+.welcome-content p {
+  font-size: 16px;
+  margin: 0 0 16px 0;
+  opacity: 0.9;
+  color: white;
+}
+
+.welcome-date {
+  font-size: 14px;
+  opacity: 0.8;
+  font-weight: 500;
+}
+
+/* Metrics Grid */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  padding: 0 16px;
+  margin-bottom: 16px;
+}
+
+.metric-card {
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: var(--shadow-card);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+}
+
+.metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-elevated);
+}
+
+.metric-item {
+  text-align: center;
+  padding: 16px 12px;
+}
+
+.metric-icon {
+  margin-bottom: 8px;
+  color: var(--f7-theme-color);
+  width: 24px;
+  height: 24px;
+}
+
+.metric-icon svg {
+  width: 100%;
+  height: 100%;
+  stroke-width: 2;
+}
+
+.metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--f7-theme-color);
+  margin-bottom: 4px;
+  line-height: 1.2;
+}
+
+.metric-label {
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+/* Action Card */
+.action-card {
+  margin: 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: var(--shadow-card);
+}
+
+.action-card h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 20px 0;
+  color: #333;
+}
+
+.quick-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.quick-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 16px;
+  background: rgba(139, 90, 156, 0.1);
+  border: 1px solid rgba(139, 90, 156, 0.2);
+  border-radius: 12px;
+  color: var(--f7-theme-color);
+  font-weight: 600;
+  transition: all 0.3s ease;
+  min-height: 80px;
+}
+
+.quick-action-btn:hover {
+  background: rgba(139, 90, 156, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(139, 90, 156, 0.2);
+}
+
+.quick-action-btn svg {
+  width: 28px;
+  height: 28px;
+  margin-bottom: 8px;
+  stroke-width: 2;
+}
+
+.quick-action-btn span {
+  font-size: 14px;
+  text-align: center;
+}
+
+/* Activity Card */
+.activity-card {
+  margin: 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: var(--shadow-card);
+}
+
+.activity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.activity-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+  color: #333;
+}
+
+.view-all-btn {
+  background: none;
+  border: none;
+  color: var(--f7-theme-color);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 4px 8px;
+}
+
+.activity-list {
+  margin: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.activity-item {
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.activity-item:last-child {
+  border-bottom: none;
+}
+
+.activity-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.trip-icon {
+  background: rgba(40, 167, 69, 0.1);
+  color: #28a745;
+}
+
+.advance-icon {
+  background: rgba(255, 193, 7, 0.1);
+  color: #ffc107;
+}
+
+.activity-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.activity-subtitle {
+  font-size: 14px;
+  color: #666;
+  line-height: 1.3;
+}
+
+.activity-time {
+  font-size: 12px;
+  color: #999;
+  font-weight: 500;
+}
+
+/* Empty State */
+.empty-state-card {
+  margin: 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: var(--shadow-card);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.empty-state svg {
+  color: #ccc;
+  margin-bottom: 16px;
+  width: 48px;
+  height: 48px;
+  stroke-width: 2;
+}
+
+.empty-state h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #666;
+  margin: 0 0 8px 0;
+}
+
+.empty-state p {
+  font-size: 16px;
+  color: #999;
+  margin: 0 0 24px 0;
+  line-height: 1.4;
+}
+
+/* Loading States */
+.loading-container {
+  padding: 16px;
+}
+
+.loading-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: 16px;
+}
+
+/* Responsive Design */
+@media (max-width: 480px) {
+  .metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .quick-actions-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .metric-card, .action-card, .activity-card, .welcome-card {
+    margin: 8px;
+  }
+  
+  .welcome-content h2 {
+    font-size: 20px;
+  }
+  
+  .metric-value {
+    font-size: 20px;
+  }
+  
+  .quick-action-btn {
+    padding: 16px 12px;
+    min-height: 60px;
+  }
+  
+  .quick-action-btn span {
+    font-size: 12px;
+  }
+}
+
+/* Animation Delays for Staggered Effect */
+.metric-card:nth-child(1) { animation-delay: 0.1s; }
+.metric-card:nth-child(2) { animation-delay: 0.2s; }
+.metric-card:nth-child(3) { animation-delay: 0.3s; }
+.metric-card:nth-child(4) { animation-delay: 0.4s; }
+
+/* Hover Effects for Touch Devices */
+@media (hover: none) and (pointer: coarse) {
+  .metric-card:hover,
+  .quick-action-btn:hover {
+    transform: none;
+    box-shadow: var(--shadow-card);
+  }
+  
+  .metric-card:active,
+  .quick-action-btn:active {
+    transform: scale(0.98);
+  }
+}

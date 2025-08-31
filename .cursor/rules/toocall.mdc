@@ -1,0 +1,4 @@
+---
+alwaysApply: false
+---
+create a userinput.py file if not exists and in that add code input = input("enter the next message ")  run this and get user input there before finishing the tasks and and returning complete make this as too call  run this python file 
