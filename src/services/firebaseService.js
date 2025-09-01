@@ -16,13 +16,11 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { db, isFirebaseAvailable } from '../firebase/config';
-import { 
-  localTripService, 
-  localVehicleService, 
-  localAdvanceService, 
-  localVillageService, 
-  localDashboardService,
-  initializeSampleData 
+import {
+  localTripService,
+  localVehicleService,
+  localAdvanceService,
+  initializeSampleData
 } from './localStorageService';
 
 // Initialize sample data if Firebase is not available (only once)
@@ -33,23 +31,6 @@ if (!isFirebaseAvailable && !sampleDataInitialized) {
   sampleDataInitialized = true;
 }
 
-// Error handling wrapper for Firebase operations
-const handleFirebaseError = (error, operation) => {
-  console.error(`Firebase ${operation} error:`, error);
-  
-  // Check for specific Firebase errors
-  if (error.code === 'unavailable') {
-    throw new Error('Firebase is currently unavailable. Please check your internet connection.');
-  } else if (error.code === 'permission-denied') {
-    throw new Error('Permission denied. Please check your Firebase security rules.');
-  } else if (error.code === 'not-found') {
-    throw new Error('Requested data not found.');
-  } else if (error.message.includes('CONFIGURATION_NOT_FOUND')) {
-    throw new Error('Firebase project configuration not found. Please check your project setup.');
-  }
-  
-  throw error;
-};
 
 // Check if Firebase is available before operations
 const checkFirebaseAvailability = () => {
