@@ -15,11 +15,17 @@ import {
   Actions,
   ActionsGroup,
   ActionsButton,
-  Badge
+  Badge,
+  Popup,
+  Page,
+  Navbar,
+  NavRight,
+  Link,
+  Chip
 } from 'framework7-react';
 import Toast from '../Common/Toast';
 import { CSVLink } from 'react-csv';
-import { tripService, vehicleService, advanceService } from '../../services/firebaseService';
+import { tripService, vehicleService, advanceService, villageService } from '../../services/firebaseService';
 import { calculateAdvanceTotals, formatCurrency as utilFormatCurrency } from '../../types';
 import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays } from 'date-fns';
 import './Reports.css';
@@ -47,11 +53,29 @@ const Reports = () => {
   
   // eslint-disable-next-line no-unused-vars
   const [vehicles, setVehicles] = useState([]);
+  const [allVillages, setAllVillages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
   const [showExportActions, setShowExportActions] = useState(false);
   const [csvData, setCsvData] = useState([]);
+  
+  // Edit trip state
+  const [showEditPopup, setShowEditPopup] = useState(false);
+  const [editingTrip, setEditingTrip] = useState(null);
+  const [editFormData, setEditFormData] = useState({
+    slNumber: '',
+    date: '',
+    vehicleNumber: '',
+    strNumber: '',
+    villages: [],
+    quantity: '',
+    driverName: '',
+    mobileNumber: '',
+    advanceAmount: ''
+  });
+  const [editErrors, setEditErrors] = useState({});
+  const [editLoading, setEditLoading] = useState(false);
 
   const prepareCsvData = React.useCallback((trips) => {
     const csvRows = trips.map(trip => ({
@@ -103,19 +127,51 @@ const Reports = () => {
           try {
             const advances = await advanceService.getAdvancesByTrip(trip.id);
             const advanceCalc = calculateAdvanceTotals(advances);
+            
+            // If the trip has an advanceAmount but no initial advance records,
+            // create a synthetic initial advance from the trip's advanceAmount
+            let initialTotal = advanceCalc.initial;
+            let initialAdvances = advanceCalc.initialAdvances;
+            
+            if (trip.advanceAmount > 0 && initialTotal === 0) {
+              // Create a synthetic initial advance from the trip's advanceAmount
+              initialTotal = trip.advanceAmount || 0;
+              initialAdvances = [{
+                id: `trip-${trip.id}`,
+                tripId: trip.id,
+                vehicleNumber: trip.vehicleNumber,
+                tripDate: trip.date,
+                advanceAmount: trip.advanceAmount,
+                advanceType: 'initial',
+                note: 'Initial advance from trip record',
+                createdAt: trip.createdAt || new Date()
+              }];
+            }
+            
+            // Calculate the new total including the trip's advanceAmount
+            const grandTotal = initialTotal + advanceCalc.additional;
+            
             return {
               ...trip,
               advances: advances,
-              totalAdvances: advanceCalc.total,
-              advanceCount: advanceCalc.count
+              initialAdvances: initialAdvances,
+              additionalAdvances: advanceCalc.additionalAdvances,
+              initialTotal: initialTotal,
+              additionalTotal: advanceCalc.additional,
+              totalAdvances: grandTotal,
+              advanceCount: advanceCalc.count + (initialAdvances.length > 0 ? 1 : 0)
             };
           } catch (error) {
             console.error(`Error loading advances for trip ${trip.id}:`, error);
             return {
               ...trip,
               advances: [],
-              totalAdvances: 0,
-              advanceCount: 0
+              initialAdvances: [],
+              additionalAdvances: [],
+              initialTotal: trip.advanceAmount || 0,
+              additionalTotal: 0,
+              totalAdvances: trip.advanceAmount || 0,
+              advanceCount: trip.advanceAmount > 0 ? 1 : 0
             };
           }
         })
@@ -124,9 +180,27 @@ const Reports = () => {
       // Calculate summary
       const summary = calculateSummary(tripsWithAdvances);
       
+      // Create synthetic initial advances from trip records that don't have advance records
+      const syntheticAdvances = tripsWithAdvances
+        .filter(trip => trip.advanceAmount > 0 && trip.initialTotal === trip.advanceAmount)
+        .map(trip => ({
+          id: `trip-${trip.id}`,
+          tripId: trip.id,
+          vehicleNumber: trip.vehicleNumber,
+          tripDate: trip.date,
+          advanceAmount: trip.advanceAmount,
+          advanceType: 'initial',
+          note: 'Initial advance from trip record',
+          createdAt: trip.createdAt || new Date()
+        }));
+      
+      // Combine real advances with synthetic advances
+      const realAdvances = tripsWithAdvances.flatMap(trip => trip.advances || []);
+      const combinedAdvances = [...realAdvances, ...syntheticAdvances];
+      
       setData({
         trips: tripsWithAdvances,
-        advances: tripsWithAdvances.flatMap(trip => trip.advances || []),
+        advances: combinedAdvances,
         summary: summary
       });
       
@@ -151,10 +225,12 @@ const Reports = () => {
 
   const loadInitialData = async () => {
     try {
-      const [vehicleList] = await Promise.all([
-        vehicleService.getAllVehicles()
+      const [vehicleList, villageList] = await Promise.all([
+        vehicleService.getAllVehicles(),
+        villageService.getAllVillages()
       ]);
       setVehicles(vehicleList);
+      setAllVillages(villageList);
     } catch (error) {
       console.error('Error loading initial data:', error);
     }
@@ -229,6 +305,173 @@ const Reports = () => {
     setToastMessage(message);
     setShowToast(true);
     setTimeout(() => setShowToast(false), 3000);
+  };
+
+  // Edit trip functions
+  const handleEditTrip = (trip) => {
+    setEditingTrip(trip);
+    
+    // Safely format the date
+    let formattedDate = '';
+    try {
+      if (trip.date) {
+        const dateObj = trip.date.toDate ? trip.date.toDate() : new Date(trip.date);
+        if (!isNaN(dateObj.getTime())) {
+          formattedDate = format(dateObj, 'yyyy-MM-dd');
+        }
+      }
+    } catch (error) {
+      console.error('Error formatting date:', error);
+    }
+    
+    setEditFormData({
+      slNumber: trip.slNumber,
+      date: formattedDate,
+      vehicleNumber: trip.vehicleNumber,
+      strNumber: trip.strNumber,
+      villages: trip.villages || [],
+      quantity: trip.quantity,
+      driverName: trip.driverName,
+      mobileNumber: trip.mobileNumber,
+      advanceAmount: trip.advanceAmount || 0
+    });
+    setEditErrors({});
+    setShowEditPopup(true);
+  };
+
+  const handleEditInputChange = (field, value) => {
+    setEditFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    
+    // Clear error when user starts typing
+    if (editErrors[field]) {
+      setEditErrors(prev => ({
+        ...prev,
+        [field]: null
+      }));
+    }
+  };
+
+  const handleEditVillageSelect = (village) => {
+    if (!editFormData.villages.includes(village.villageName)) {
+      setEditFormData(prev => ({
+        ...prev,
+        villages: [...prev.villages, village.villageName]
+      }));
+    }
+  };
+
+  const removeEditVillage = (villageToRemove) => {
+    setEditFormData(prev => ({
+      ...prev,
+      villages: prev.villages.filter(village => village !== villageToRemove)
+    }));
+  };
+
+  const validateEditForm = () => {
+    const newErrors = {};
+    
+    if (!editFormData.vehicleNumber.trim()) {
+      newErrors.vehicleNumber = 'Vehicle number is required';
+    }
+    
+    if (!editFormData.strNumber.trim()) {
+      newErrors.strNumber = 'STR number is required';
+    }
+    
+    if (editFormData.villages.length === 0) {
+      newErrors.villages = 'At least one village is required';
+    }
+    
+    if (!editFormData.quantity || parseFloat(editFormData.quantity) <= 0) {
+      newErrors.quantity = 'Valid quantity is required';
+    }
+    
+    if (!editFormData.driverName.trim()) {
+      newErrors.driverName = 'Driver name is required';
+    }
+    
+    if (!editFormData.mobileNumber.trim()) {
+      newErrors.mobileNumber = 'Mobile number is required';
+    } else if (!/^[6-9]\d{9}$/.test(editFormData.mobileNumber)) {
+      newErrors.mobileNumber = 'Valid 10-digit mobile number is required';
+    }
+    
+    if (editFormData.advanceAmount && parseFloat(editFormData.advanceAmount) < 0) {
+      newErrors.advanceAmount = 'Advance amount cannot be negative';
+    }
+    
+    setEditErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleEditSubmit = async () => {
+    if (!validateEditForm()) {
+      showToastMessage('Please fix the errors and try again');
+      return;
+    }
+    
+    setEditLoading(true);
+    
+    try {
+      const newAdvanceAmount = parseFloat(editFormData.advanceAmount) || 0;
+      const originalAdvanceAmount = editingTrip.advanceAmount || 0;
+      const advanceDifference = newAdvanceAmount - originalAdvanceAmount;
+      
+      const updateData = {
+        slNumber: parseInt(editFormData.slNumber),
+        date: new Date(editFormData.date),
+        vehicleNumber: editFormData.vehicleNumber.trim(),
+        strNumber: editFormData.strNumber.trim(),
+        villages: editFormData.villages,
+        quantity: parseFloat(editFormData.quantity),
+        driverName: editFormData.driverName.trim(),
+        mobileNumber: editFormData.mobileNumber.trim(),
+        advanceAmount: newAdvanceAmount
+      };
+      
+      await tripService.updateTrip(editingTrip.id, updateData);
+      
+      // If the advance amount was increased, create an additional advance record for the difference
+      if (advanceDifference > 0) {
+        await advanceService.addAdvance({
+          tripId: editingTrip.id,
+          vehicleNumber: editFormData.vehicleNumber.trim(),
+          tripDate: new Date(editFormData.date),
+          advanceAmount: advanceDifference,
+          advanceType: 'additional',
+          note: `Additional advance from trip edit (${formatCurrency(originalAdvanceAmount)} → ${formatCurrency(newAdvanceAmount)})`,
+          createdAt: new Date()
+        });
+      }
+      
+      // Update vehicle information if changed
+      const existingVehicle = vehicles.find(v => v.vehicleNumber === editFormData.vehicleNumber);
+      if (!existingVehicle ||
+          existingVehicle.driverName !== editFormData.driverName ||
+          existingVehicle.mobileNumber !== editFormData.mobileNumber) {
+        await vehicleService.addVehicle({
+          vehicleNumber: editFormData.vehicleNumber,
+          driverName: editFormData.driverName,
+          mobileNumber: editFormData.mobileNumber,
+          isActive: true
+        });
+      }
+      
+      showToastMessage('Trip updated successfully!');
+      setShowEditPopup(false);
+      
+      // Refresh the report data
+      loadReportData();
+      
+    } catch (error) {
+      console.error('Error updating trip:', error);
+      showToastMessage('Error updating trip. Please try again.');
+    } finally {
+      setEditLoading(false);
+    }
   };
 
   const formatDate = (date) => {
@@ -410,9 +653,17 @@ const Reports = () => {
                             <span className="trip-vehicle">{trip.vehicleNumber}</span>
                             <span className="trip-date">{formatDate(trip.date)}</span>
                           </div>
-                          {trip.advanceCount > 0 && (
-                            <Badge color="orange">{trip.advanceCount} advances</Badge>
-                          )}
+                          <div className="trip-actions">
+                            {trip.advanceCount > 0 && (
+                              <Badge color="orange">{trip.advanceCount} advances</Badge>
+                            )}
+                            <Button
+                              className="edit-trip-btn"
+                              onClick={() => handleEditTrip(trip)}
+                            >
+                              <Icon ios="f7:pencil" />
+                            </Button>
+                          </div>
                         </div>
                         <div className="trip-details">
                           <div className="detail-row">
@@ -434,7 +685,7 @@ const Reports = () => {
                           <div className="detail-row">
                             <span className="label">Total Advances:</span>
                             <span className="value advance-amount">
-                              {formatCurrency((trip.advanceAmount || 0) + (trip.totalAdvances || 0))}
+                              {formatCurrency(trip.advanceAmount || 0)}
                             </span>
                           </div>
                         </div>
@@ -509,6 +760,142 @@ const Reports = () => {
           </ActionsButton>
         </ActionsGroup>
       </Actions>
+
+      {/* Edit Trip Popup */}
+      <Popup className="edit-trip-popup" opened={showEditPopup} onPopupClosed={() => setShowEditPopup(false)}>
+        <Page>
+          <Navbar title="Edit Trip">
+            <NavRight>
+              <Link onClick={() => setShowEditPopup(false)}>Close</Link>
+            </NavRight>
+          </Navbar>
+          
+          <Block>
+            <List className="form-list">
+              {/* SL Number */}
+              <ListInput
+                label="SL Number"
+                type="text"
+                value={editFormData.slNumber}
+                onChange={(e) => handleEditInputChange('slNumber', e.target.value)}
+                errorMessage={editErrors.slNumber}
+                errorMessageForce={!!editErrors.slNumber}
+              />
+              
+              {/* Date */}
+              <ListInput
+                label="Date"
+                type="date"
+                value={editFormData.date}
+                onChange={(e) => handleEditInputChange('date', e.target.value)}
+                errorMessage={editErrors.date}
+                errorMessageForce={!!editErrors.date}
+              />
+              
+              {/* Vehicle Number */}
+              <ListInput
+                label="Vehicle Number"
+                type="text"
+                value={editFormData.vehicleNumber}
+                onChange={(e) => handleEditInputChange('vehicleNumber', e.target.value)}
+                errorMessage={editErrors.vehicleNumber}
+                errorMessageForce={!!editErrors.vehicleNumber}
+              />
+              
+              {/* STR Number */}
+              <ListInput
+                label="STR Number"
+                type="text"
+                value={editFormData.strNumber}
+                onChange={(e) => handleEditInputChange('strNumber', e.target.value)}
+                errorMessage={editErrors.strNumber}
+                errorMessageForce={!!editErrors.strNumber}
+              />
+              
+              {/* Villages */}
+              <ListItem className="villages-section">
+                <div className="villages-header">
+                  <span className="villages-label">Villages</span>
+                </div>
+                <div className="villages-chips">
+                  {editFormData.villages.map((village, index) => (
+                    <Chip
+                      key={index}
+                      text={village}
+                      deleteable
+                      onDelete={() => removeEditVillage(village)}
+                      className="village-chip"
+                    />
+                  ))}
+                  {editFormData.villages.length === 0 && (
+                    <span className="no-villages">No villages selected</span>
+                  )}
+                </div>
+                {editErrors.villages && (
+                  <div className="error-message">{editErrors.villages}</div>
+                )}
+              </ListItem>
+              
+              {/* Quantity */}
+              <ListInput
+                label="Quantity"
+                type="number"
+                value={editFormData.quantity}
+                onChange={(e) => handleEditInputChange('quantity', e.target.value)}
+                errorMessage={editErrors.quantity}
+                errorMessageForce={!!editErrors.quantity}
+              />
+              
+              {/* Driver Name */}
+              <ListInput
+                label="Driver Name"
+                type="text"
+                value={editFormData.driverName}
+                onChange={(e) => handleEditInputChange('driverName', e.target.value)}
+                errorMessage={editErrors.driverName}
+                errorMessageForce={!!editErrors.driverName}
+              />
+              
+              {/* Mobile Number */}
+              <ListInput
+                label="Mobile Number"
+                type="tel"
+                value={editFormData.mobileNumber}
+                onChange={(e) => handleEditInputChange('mobileNumber', e.target.value)}
+                errorMessage={editErrors.mobileNumber}
+                errorMessageForce={!!editErrors.mobileNumber}
+              />
+              
+              {/* Advance Amount */}
+              <ListInput
+                label="Advance Amount (₹)"
+                type="number"
+                value={editFormData.advanceAmount}
+                onChange={(e) => handleEditInputChange('advanceAmount', e.target.value)}
+                errorMessage={editErrors.advanceAmount}
+                errorMessageForce={!!editErrors.advanceAmount}
+              />
+            </List>
+            
+            <div className="form-actions">
+              <Button
+                className="btn-secondary"
+                onClick={() => setShowEditPopup(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="btn-primary"
+                onClick={handleEditSubmit}
+                preloader
+                loading={editLoading}
+              >
+                Update Trip
+              </Button>
+            </div>
+          </Block>
+        </Page>
+      </Popup>
 
       {/* Toast */}
       <Toast opened={showToast} text={toastMessage} onToastClosed={() => setShowToast(false)} />

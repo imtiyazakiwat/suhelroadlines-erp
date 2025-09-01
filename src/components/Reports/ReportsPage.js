@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { CSVLink } from 'react-csv';
-import { tripService, vehicleService, advanceService } from '../../services/firebaseService';
+import { tripService, vehicleService, advanceService, villageService } from '../../services/firebaseService';
 import { calculateAdvanceTotals, formatCurrency as utilFormatCurrency } from '../../types';
 import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays } from 'date-fns';
 import Toast from '../Common/Toast';
@@ -29,17 +29,37 @@ const ReportsPage = () => {
   
   // eslint-disable-next-line no-unused-vars
   const [vehicles, setVehicles] = useState([]);
+  const [allVillages, setAllVillages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
   const [csvData, setCsvData] = useState([]);
+  
+  // Edit trip state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingTrip, setEditingTrip] = useState(null);
+  const [editFormData, setEditFormData] = useState({
+    slNumber: '',
+    date: '',
+    vehicleNumber: '',
+    strNumber: '',
+    villages: [],
+    quantity: '',
+    driverName: '',
+    mobileNumber: '',
+    advanceAmount: ''
+  });
+  const [editErrors, setEditErrors] = useState({});
+  const [editLoading, setEditLoading] = useState(false);
 
   const loadInitialData = useCallback(async () => {
     try {
-      const [vehicleList] = await Promise.all([
-        vehicleService.getAllVehicles()
+      const [vehicleList, villageList] = await Promise.all([
+        vehicleService.getAllVehicles(),
+        villageService.getAllVillages()
       ]);
       setVehicles(vehicleList);
+      setAllVillages(villageList);
     } catch (error) {
       console.error('Error loading initial data:', error);
     }
@@ -92,17 +112,40 @@ const ReportsPage = () => {
           // Use centralized calculation utility
           const advanceCalc = calculateAdvanceTotals(advances);
           
-          console.log(`Trip ${trip.id}: Found ${advances.length} advances, total: ${advanceCalc.total}`);
+          // If the trip has an advanceAmount but no initial advance records,
+          // create a synthetic initial advance from the trip's advanceAmount
+          let initialTotal = advanceCalc.initial;
+          let initialAdvances = advanceCalc.initialAdvances;
+          
+          if (trip.advanceAmount > 0 && initialTotal === 0) {
+            // Create a synthetic initial advance from the trip's advanceAmount
+            initialTotal = trip.advanceAmount || 0;
+            initialAdvances = [{
+              id: `trip-${trip.id}`,
+              tripId: trip.id,
+              vehicleNumber: trip.vehicleNumber,
+              tripDate: trip.date,
+              advanceAmount: trip.advanceAmount,
+              advanceType: 'initial',
+              note: 'Initial advance from trip record',
+              createdAt: trip.createdAt || new Date()
+            }];
+          }
+          
+          // Calculate the new total including the trip's advanceAmount
+          const grandTotal = initialTotal + advanceCalc.additional;
+          
+          console.log(`Trip ${trip.id}: Found ${advances.length} advances, initial: ${initialTotal}, additional: ${advanceCalc.additional}, total: ${grandTotal}`);
           
           return {
             ...trip,
             advances: advances,
-            initialAdvances: advanceCalc.initialAdvances,
+            initialAdvances: initialAdvances,
             additionalAdvances: advanceCalc.additionalAdvances,
-            initialTotal: advanceCalc.initial,
+            initialTotal: initialTotal,
             additionalTotal: advanceCalc.additional,
-            totalAdvances: advanceCalc.total, // Use centralized calculation
-            advanceCount: advanceCalc.count
+            totalAdvances: grandTotal,
+            advanceCount: advanceCalc.count + (initialAdvances.length > 0 ? 1 : 0)
           };
         } catch (error) {
           console.error(`Error loading advances for trip ${trip.id}:`, error);
@@ -111,19 +154,36 @@ const ReportsPage = () => {
             advances: [],
             initialAdvances: [],
             additionalAdvances: [],
-            initialTotal: 0,
+            initialTotal: trip.advanceAmount || 0, // Use trip's advanceAmount as fallback
             additionalTotal: 0,
-            totalAdvances: 0,
-            advanceCount: 0
+            totalAdvances: trip.advanceAmount || 0, // Use trip's advanceAmount as fallback
+            advanceCount: trip.advanceAmount > 0 ? 1 : 0
           };
         }
       });
       
       const summary = calculateSummary(tripsWithAdvances);
       
+      // Create synthetic initial advances from trip records that don't have advance records
+      const syntheticAdvances = tripsWithAdvances
+        .filter(trip => trip.advanceAmount > 0 && trip.initialTotal === trip.advanceAmount)
+        .map(trip => ({
+          id: `trip-${trip.id}`,
+          tripId: trip.id,
+          vehicleNumber: trip.vehicleNumber,
+          tripDate: trip.date,
+          advanceAmount: trip.advanceAmount,
+          advanceType: 'initial',
+          note: 'Initial advance from trip record',
+          createdAt: trip.createdAt || new Date()
+        }));
+      
+      // Combine real advances with synthetic advances
+      const combinedAdvances = [...allAdvances, ...syntheticAdvances];
+      
       setData({
         trips: tripsWithAdvances,
-        advances: allAdvances, // Use all advances from the date range
+        advances: combinedAdvances,
         summary: summary
       });
       
@@ -237,6 +297,164 @@ const ReportsPage = () => {
     setToastMessage(message);
     setShowToast(true);
     setTimeout(() => setShowToast(false), 3000);
+  };
+
+  // Edit trip functions
+  const handleEditTrip = (trip) => {
+    setEditingTrip(trip);
+    
+    // Safely format the date
+    let formattedDate = '';
+    try {
+      if (trip.date) {
+        const dateObj = trip.date.toDate ? trip.date.toDate() : new Date(trip.date);
+        if (!isNaN(dateObj.getTime())) {
+          formattedDate = format(dateObj, 'yyyy-MM-dd');
+        }
+      }
+    } catch (error) {
+      console.error('Error formatting date:', error);
+    }
+    
+    setEditFormData({
+      slNumber: trip.slNumber,
+      date: formattedDate,
+      vehicleNumber: trip.vehicleNumber,
+      strNumber: trip.strNumber,
+      villages: trip.villages || [],
+      quantity: trip.quantity,
+      driverName: trip.driverName,
+      mobileNumber: trip.mobileNumber,
+      advanceAmount: trip.advanceAmount || 0
+    });
+    setEditErrors({});
+    setShowEditModal(true);
+  };
+
+  const handleEditInputChange = (field, value) => {
+    setEditFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    
+    // Clear error when user starts typing
+    if (editErrors[field]) {
+      setEditErrors(prev => ({
+        ...prev,
+        [field]: null
+      }));
+    }
+  };
+
+  const removeEditVillage = (villageToRemove) => {
+    setEditFormData(prev => ({
+      ...prev,
+      villages: prev.villages.filter(village => village !== villageToRemove)
+    }));
+  };
+
+  const validateEditForm = () => {
+    const newErrors = {};
+    
+    if (!editFormData.vehicleNumber.trim()) {
+      newErrors.vehicleNumber = 'Vehicle number is required';
+    }
+    
+    if (!editFormData.strNumber.trim()) {
+      newErrors.strNumber = 'STR number is required';
+    }
+    
+    if (editFormData.villages.length === 0) {
+      newErrors.villages = 'At least one village is required';
+    }
+    
+    if (!editFormData.quantity || parseFloat(editFormData.quantity) <= 0) {
+      newErrors.quantity = 'Valid quantity is required';
+    }
+    
+    if (!editFormData.driverName.trim()) {
+      newErrors.driverName = 'Driver name is required';
+    }
+    
+    if (!editFormData.mobileNumber.trim()) {
+      newErrors.mobileNumber = 'Mobile number is required';
+    } else if (!/^[6-9]\d{9}$/.test(editFormData.mobileNumber)) {
+      newErrors.mobileNumber = 'Valid 10-digit mobile number is required';
+    }
+    
+    if (editFormData.advanceAmount && parseFloat(editFormData.advanceAmount) < 0) {
+      newErrors.advanceAmount = 'Advance amount cannot be negative';
+    }
+    
+    setEditErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleEditSubmit = async () => {
+    if (!validateEditForm()) {
+      showToastMessage('Please fix the errors and try again');
+      return;
+    }
+    
+    setEditLoading(true);
+    
+    try {
+      const newAdvanceAmount = parseFloat(editFormData.advanceAmount) || 0;
+      const originalAdvanceAmount = editingTrip.advanceAmount || 0;
+      const advanceDifference = newAdvanceAmount - originalAdvanceAmount;
+      
+      const updateData = {
+        slNumber: parseInt(editFormData.slNumber),
+        date: new Date(editFormData.date),
+        vehicleNumber: editFormData.vehicleNumber.trim(),
+        strNumber: editFormData.strNumber.trim(),
+        villages: editFormData.villages,
+        quantity: parseFloat(editFormData.quantity),
+        driverName: editFormData.driverName.trim(),
+        mobileNumber: editFormData.mobileNumber.trim(),
+        advanceAmount: newAdvanceAmount
+      };
+      
+      await tripService.updateTrip(editingTrip.id, updateData);
+      
+      // If the advance amount was increased, create an additional advance record for the difference
+      if (advanceDifference > 0) {
+        await advanceService.addAdvance({
+          tripId: editingTrip.id,
+          vehicleNumber: editFormData.vehicleNumber.trim(),
+          tripDate: new Date(editFormData.date),
+          advanceAmount: advanceDifference,
+          advanceType: 'additional',
+          note: `Additional advance from trip edit (${formatCurrency(originalAdvanceAmount)} → ${formatCurrency(newAdvanceAmount)})`,
+          createdAt: new Date()
+        });
+      }
+      
+      // Update vehicle information if changed
+      const existingVehicle = vehicles.find(v => v.vehicleNumber === editFormData.vehicleNumber);
+      if (!existingVehicle ||
+          existingVehicle.driverName !== editFormData.driverName ||
+          existingVehicle.mobileNumber !== editFormData.mobileNumber) {
+        await vehicleService.addVehicle({
+          vehicleNumber: editFormData.vehicleNumber,
+          driverName: editFormData.driverName,
+          mobileNumber: editFormData.mobileNumber,
+          isActive: true
+        });
+      }
+      
+      showToastMessage('Trip updated successfully!');
+      setShowEditModal(false);
+      
+      // Refresh the report data
+      loadReportData();
+      
+    } catch (error) {
+      console.error('Error updating trip:', error);
+      showToastMessage('Error updating trip. Please try again.');
+    } finally {
+      setEditLoading(false);
+    }
   };
 
   const formatDate = (date) => {
@@ -475,11 +693,23 @@ const ReportsPage = () => {
                         <span className="trip-vehicle">{trip.vehicleNumber}</span>
                         <span className="trip-date">{formatDate(trip.date)}</span>
                       </div>
-                      {trip.advanceCount > 0 && (
-                        <div className="advance-badge">
-                          {trip.advanceCount} advance{trip.advanceCount > 1 ? 's' : ''}
-                        </div>
-                      )}
+                      <div className="trip-actions">
+                        {trip.advanceCount > 0 && (
+                          <div className="advance-badge">
+                            {trip.advanceCount} advance{trip.advanceCount > 1 ? 's' : ''}
+                          </div>
+                        )}
+                        <button
+                          className="btn-icon edit-trip-btn"
+                          onClick={() => handleEditTrip(trip)}
+                          title="Edit Trip"
+                        >
+                          <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                     <div className="trip-details">
                       <div className="detail-grid">
@@ -498,7 +728,7 @@ const ReportsPage = () => {
                         <div className="detail-item">
                           <span className="detail-label">Total Advances</span>
                           <span className="detail-value advance-amount">
-                            {formatCurrency(trip.totalAdvances || 0)}
+                            {formatCurrency(trip.advanceAmount || 0)}
                           </span>
                         </div>
                       </div>
@@ -558,6 +788,173 @@ const ReportsPage = () => {
           )}
         </div>
       </div>
+
+      {/* Edit Trip Modal */}
+      {showEditModal && (
+        <div className="modal-overlay">
+          <div className="modal-container">
+            <div className="modal-header">
+              <h2 className="modal-title">Edit Trip</h2>
+              <button
+                className="modal-close"
+                onClick={() => setShowEditModal(false)}
+              >
+                <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+            
+            <div className="modal-body">
+              <div className="form-group">
+                <label className="form-label">SL Number</label>
+                <input
+                  type="text"
+                  value={editFormData.slNumber}
+                  onChange={(e) => handleEditInputChange('slNumber', e.target.value)}
+                  className={`form-input ${editErrors.slNumber ? 'error' : ''}`}
+                />
+                {editErrors.slNumber && <span className="error-text">{editErrors.slNumber}</span>}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Date</label>
+                <input
+                  type="date"
+                  value={editFormData.date}
+                  onChange={(e) => handleEditInputChange('date', e.target.value)}
+                  className={`form-input ${editErrors.date ? 'error' : ''}`}
+                />
+                {editErrors.date && <span className="error-text">{editErrors.date}</span>}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Vehicle Number</label>
+                <input
+                  type="text"
+                  value={editFormData.vehicleNumber}
+                  onChange={(e) => handleEditInputChange('vehicleNumber', e.target.value)}
+                  className={`form-input ${editErrors.vehicleNumber ? 'error' : ''}`}
+                />
+                {editErrors.vehicleNumber && <span className="error-text">{editErrors.vehicleNumber}</span>}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">STR Number</label>
+                <input
+                  type="text"
+                  value={editFormData.strNumber}
+                  onChange={(e) => handleEditInputChange('strNumber', e.target.value)}
+                  className={`form-input ${editErrors.strNumber ? 'error' : ''}`}
+                />
+                {editErrors.strNumber && <span className="error-text">{editErrors.strNumber}</span>}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Villages</label>
+                <div className="villages-container">
+                  {editFormData.villages.length > 0 && (
+                    <div className="selected-villages">
+                      {editFormData.villages.map((village, index) => (
+                        <span key={index} className="village-chip">
+                          {village}
+                          <button
+                            type="button"
+                            onClick={() => removeEditVillage(village)}
+                            className="remove-chip"
+                          >
+                            <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                              <line x1="18" y1="6" x2="6" y2="18"></line>
+                              <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {editFormData.villages.length === 0 && (
+                    <span className="no-villages">No villages selected</span>
+                  )}
+                </div>
+                {editErrors.villages && <span className="error-text">{editErrors.villages}</span>}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Quantity</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editFormData.quantity}
+                  onChange={(e) => handleEditInputChange('quantity', e.target.value)}
+                  className={`form-input ${editErrors.quantity ? 'error' : ''}`}
+                />
+                {editErrors.quantity && <span className="error-text">{editErrors.quantity}</span>}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Driver Name</label>
+                <input
+                  type="text"
+                  value={editFormData.driverName}
+                  onChange={(e) => handleEditInputChange('driverName', e.target.value)}
+                  className={`form-input ${editErrors.driverName ? 'error' : ''}`}
+                />
+                {editErrors.driverName && <span className="error-text">{editErrors.driverName}</span>}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Mobile Number</label>
+                <input
+                  type="tel"
+                  value={editFormData.mobileNumber}
+                  onChange={(e) => handleEditInputChange('mobileNumber', e.target.value)}
+                  className={`form-input ${editErrors.mobileNumber ? 'error' : ''}`}
+                />
+                {editErrors.mobileNumber && <span className="error-text">{editErrors.mobileNumber}</span>}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Advance Amount (₹)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editFormData.advanceAmount}
+                  onChange={(e) => handleEditInputChange('advanceAmount', e.target.value)}
+                  className={`form-input ${editErrors.advanceAmount ? 'error' : ''}`}
+                />
+                {editErrors.advanceAmount && <span className="error-text">{editErrors.advanceAmount}</span>}
+              </div>
+            </div>
+            
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowEditModal(false)}
+                disabled={editLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleEditSubmit}
+                disabled={editLoading}
+              >
+                {editLoading ? (
+                  <>
+                    <div className="loading"></div>
+                    Updating...
+                  </>
+                ) : (
+                  'Update Trip'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Toast opened={showToast} text={toastMessage} onToastClosed={() => setShowToast(false)} />
     </div>
