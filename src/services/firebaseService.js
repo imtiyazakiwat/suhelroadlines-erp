@@ -56,13 +56,30 @@ export const tripService = {
   // Add new trip
   async addTrip(tripData) {
     try {
+      // Import validation constants
+      const { VEHICLE_TYPES, STR_STATUS_VALUES } = await import('../types');
+      
+      // Validate vehicleType
+      const vehicleType = tripData.vehicleType || 'lorry'; // Default to 'lorry'
+      if (!VEHICLE_TYPES.includes(vehicleType)) {
+        throw new Error(`Invalid vehicleType: ${vehicleType}. Must be one of: ${VEHICLE_TYPES.join(', ')}`);
+      }
+      
+      // Validate strStatus
+      const strStatus = tripData.strStatus || 'not received'; // Default to 'not received'
+      if (!STR_STATUS_VALUES.includes(strStatus)) {
+        throw new Error(`Invalid strStatus: ${strStatus}. Must be one of: ${STR_STATUS_VALUES.join(', ')}`);
+      }
+      
       const docRef = await addDoc(collection(db, COLLECTIONS.TRIPS), {
         ...tripData,
+        vehicleType,
+        strStatus,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
       
-      const tripWithId = { ...tripData, id: docRef.id };
+      const tripWithId = { ...tripData, vehicleType, strStatus, id: docRef.id };
       
       // If trip has initial advance amount, create an initial advance record
       if (tripData.advanceAmount && tripData.advanceAmount > 0) {
@@ -169,12 +186,32 @@ export const tripService = {
   // Update trip
   async updateTrip(tripId, updateData) {
     try {
+      // Import validation constants
+      const { VEHICLE_TYPES, STR_STATUS_VALUES } = await import('../types');
+      
+      // Validate vehicleType if provided
+      let finalUpdateData = { ...updateData };
+      if (updateData.vehicleType !== undefined) {
+        if (!VEHICLE_TYPES.includes(updateData.vehicleType)) {
+          throw new Error(`Invalid vehicleType: ${updateData.vehicleType}. Must be one of: ${VEHICLE_TYPES.join(', ')}`);
+        }
+        finalUpdateData.vehicleType = updateData.vehicleType;
+      }
+      
+      // Validate strStatus if provided
+      if (updateData.strStatus !== undefined) {
+        if (!STR_STATUS_VALUES.includes(updateData.strStatus)) {
+          throw new Error(`Invalid strStatus: ${updateData.strStatus}. Must be one of: ${STR_STATUS_VALUES.join(', ')}`);
+        }
+        finalUpdateData.strStatus = updateData.strStatus;
+      }
+      
       const tripRef = doc(db, COLLECTIONS.TRIPS, tripId);
       await updateDoc(tripRef, {
-        ...updateData,
+        ...finalUpdateData,
         updatedAt: serverTimestamp()
       });
-      return { id: tripId, ...updateData };
+      return { id: tripId, ...finalUpdateData };
     } catch (error) {
       console.error('Error updating trip:', error);
       throw error;
@@ -209,6 +246,29 @@ export const tripService = {
       console.error('Error getting next SL number:', error);
       return 1;
     }
+  },
+
+  // Update STR status only
+  async updateSTRStatus(tripId, strStatus) {
+    try {
+      // Import validation constants
+      const { STR_STATUS_VALUES } = await import('../types');
+      
+      // Validate strStatus
+      if (!STR_STATUS_VALUES.includes(strStatus)) {
+        throw new Error(`Invalid strStatus: ${strStatus}. Must be one of: ${STR_STATUS_VALUES.join(', ')}`);
+      }
+      
+      const tripRef = doc(db, COLLECTIONS.TRIPS, tripId);
+      await updateDoc(tripRef, {
+        strStatus: strStatus,
+        updatedAt: serverTimestamp()
+      });
+      return { id: tripId, strStatus };
+    } catch (error) {
+      console.error('Error updating STR status:', error);
+      throw error;
+    }
   }
 };
 
@@ -217,13 +277,23 @@ export const vehicleService = {
   // Add new vehicle
   async addVehicle(vehicleData) {
     try {
+      // Import validation constants
+      const { VEHICLE_TYPES } = await import('../types');
+      
+      // Validate vehicleType
+      const vehicleType = vehicleData.vehicleType || 'lorry'; // Default to 'lorry'
+      if (!VEHICLE_TYPES.includes(vehicleType)) {
+        throw new Error(`Invalid vehicleType: ${vehicleType}. Must be one of: ${VEHICLE_TYPES.join(', ')}`);
+      }
+      
       const vehicleRef = doc(db, COLLECTIONS.VEHICLES, vehicleData.vehicleNumber);
       await setDoc(vehicleRef, {
         ...vehicleData,
+        vehicleType,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       }, { merge: true });
-      return vehicleData;
+      return { ...vehicleData, vehicleType };
     } catch (error) {
       console.error('Error adding vehicle:', error);
       throw error;
@@ -272,12 +342,24 @@ export const vehicleService = {
   // Update vehicle
   async updateVehicle(vehicleNumber, updateData) {
     try {
+      // Import validation constants
+      const { VEHICLE_TYPES } = await import('../types');
+      
+      // Validate vehicleType if provided
+      let finalUpdateData = { ...updateData };
+      if (updateData.vehicleType !== undefined) {
+        if (!VEHICLE_TYPES.includes(updateData.vehicleType)) {
+          throw new Error(`Invalid vehicleType: ${updateData.vehicleType}. Must be one of: ${VEHICLE_TYPES.join(', ')}`);
+        }
+        finalUpdateData.vehicleType = updateData.vehicleType;
+      }
+      
       const vehicleRef = doc(db, COLLECTIONS.VEHICLES, vehicleNumber);
       await updateDoc(vehicleRef, {
-        ...updateData,
+        ...finalUpdateData,
         updatedAt: serverTimestamp()
       });
-      return { vehicleNumber, ...updateData };
+      return { vehicleNumber, ...finalUpdateData };
     } catch (error) {
       console.error('Error updating vehicle:', error);
       throw error;

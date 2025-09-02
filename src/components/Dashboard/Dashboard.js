@@ -33,6 +33,21 @@ const Dashboard = () => {
     try {
       setLoading(true);
       const data = await dashboardService.getTodayMetrics();
+      console.log('Dashboard data loaded:', data);
+      
+      // Log recent trips to check vehicleType and strStatus
+      if (data.recentTrips && data.recentTrips.length > 0) {
+        console.log('Recent trips with new fields:');
+        data.recentTrips.forEach((trip, index) => {
+          console.log(`Trip ${index + 1}:`, {
+            vehicleNumber: trip.vehicleNumber,
+            vehicleType: trip.vehicleType,
+            strStatus: trip.strStatus,
+            villages: trip.villages
+          });
+        });
+      }
+      
       setMetrics(data);
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -202,7 +217,8 @@ const Dashboard = () => {
                     Trip #{trip.slNumber} - {trip.vehicleNumber}
                   </div>
                   <div slot="subtitle" className="activity-subtitle">
-                    {trip.villages?.join(', ') || 'No villages'} • Qty: {trip.quantity}
+                    {trip.villages?.join(', ') || 'No villages'} • Qty: {trip.quantity} •
+                    Type: {trip.vehicleType || 'lorry'} • STR: {trip.strStatus || 'not received'}
                   </div>
                   <div slot="after" className="activity-time">
                     {formatTime(trip.createdAt)}

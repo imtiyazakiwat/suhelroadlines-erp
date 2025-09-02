@@ -10,7 +10,9 @@ export const createTripEntry = ({
   quantity,
   driverName,
   mobileNumber,
-  advanceAmount = 0
+  advanceAmount = 0,
+  vehicleType = 'lorry',
+  strStatus = 'not received'
 }) => ({
   id: null, // Will be set by Firestore
   slNumber: slNumber || 0,
@@ -22,19 +24,29 @@ export const createTripEntry = ({
   driverName: driverName || '',
   mobileNumber: mobileNumber || '',
   advanceAmount: advanceAmount,
+  vehicleType: vehicleType,
+  strStatus: strStatus,
   createdAt: new Date(),
   updatedAt: new Date()
 });
+
+// Valid vehicle types
+export const VEHICLE_TYPES = ['lorry', 'tempo', 'pickup'];
+
+// Valid STR status values
+export const STR_STATUS_VALUES = ['not received', 'Received'];
 
 // Vehicle Model
 export const createVehicle = ({
   vehicleNumber,
   driverName,
-  mobileNumber
+  mobileNumber,
+  vehicleType = 'lorry'
 }) => ({
   vehicleNumber: vehicleNumber || '',
   driverName: driverName || '',
   mobileNumber: mobileNumber || '',
+  vehicleType: vehicleType,
   isActive: true,
   createdAt: new Date(),
   updatedAt: new Date()

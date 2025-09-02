@@ -32,6 +32,7 @@ const AddEntry = () => {
     date: format(new Date(), 'yyyy-MM-dd'),
     vehicleNumber: '',
     strNumber: '',
+    vehicleType: 'lorry',
     villages: [],
     quantity: '',
     driverName: '',
@@ -169,7 +170,11 @@ const AddEntry = () => {
     }
     
     if (!formData.strNumber.trim()) {
-      newErrors.strNumber = 'STR number is required';
+      newErrors.strNumber = 'STR status is required';
+    }
+    
+    if (!formData.vehicleType) {
+      newErrors.vehicleType = 'Vehicle type is required';
     }
     
     if (formData.villages.length === 0) {
@@ -212,6 +217,7 @@ const AddEntry = () => {
         date: new Date(formData.date),
         vehicleNumber: formData.vehicleNumber.trim(),
         strNumber: formData.strNumber.trim(),
+        vehicleType: formData.vehicleType,
         villages: formData.villages,
         quantity: parseFloat(formData.quantity),
         driverName: formData.driverName.trim(),
@@ -320,16 +326,48 @@ const AddEntry = () => {
               <div className="error-message">{errors.vehicleNumber}</div>
             )}
             
-            {/* STR Number */}
-            <ListInput
-              label="STR Number"
-              type="text"
-              placeholder="Enter STR number"
-              value={formData.strNumber}
-              onChange={(e) => handleInputChange('strNumber', e.target.value)}
-              errorMessage={errors.strNumber}
-              errorMessageForce={!!errors.strNumber}
-            />
+            {/* STR Status */}
+            <ListItem
+              title="STR Status"
+              smartSelect
+              smartSelectParams={{ openIn: 'popup' }}
+              className={errors.strNumber ? 'error-field' : ''}
+            >
+              <select
+                name="strNumber"
+                value={formData.strNumber}
+                onChange={(e) => handleInputChange('strNumber', e.target.value)}
+              >
+                <option value="not received">Not Received</option>
+                <option value="Received">Received</option>
+              </select>
+              <Icon slot="media" ios="f7:doc_text" />
+            </ListItem>
+            {errors.strNumber && (
+              <div className="error-message">{errors.strNumber}</div>
+            )}
+            
+            {/* Vehicle Type */}
+            <ListItem
+              title="Vehicle Type"
+              smartSelect
+              smartSelectParams={{ openIn: 'popup' }}
+              className={errors.vehicleType ? 'error-field' : ''}
+            >
+              <select
+                name="vehicleType"
+                value={formData.vehicleType}
+                onChange={(e) => handleInputChange('vehicleType', e.target.value)}
+              >
+                <option value="lorry">Lorry</option>
+                <option value="tempo">Tempo</option>
+                <option value="pickup">Pickup</option>
+              </select>
+              <Icon slot="media" ios="f7:car" />
+            </ListItem>
+            {errors.vehicleType && (
+              <div className="error-message">{errors.vehicleType}</div>
+            )}
             
             {/* Villages */}
             <ListItem className="villages-section">

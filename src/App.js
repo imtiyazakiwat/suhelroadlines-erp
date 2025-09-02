@@ -8,6 +8,7 @@ import SimpleAddEntry from './components/AddEntry/SimpleAddEntry';
 import SimpleAddAdvance from './components/AddAdvance/SimpleAddAdvance';
 import SimpleReports from './components/Reports/SimpleReports';
 import SimpleSettings from './components/Settings/SimpleSettings';
+import SimpleSTRStatus from './components/STRStatus/SimpleSTRStatus';
 
 // Import custom styles
 import './App.css';
@@ -21,6 +22,7 @@ function App() {
           <Route path="/add-entry" element={<SimpleAddEntry />} />
           <Route path="/add-advance" element={<SimpleAddAdvance />} />
           <Route path="/reports" element={<SimpleReports />} />
+          <Route path="/str-status" element={<SimpleSTRStatus />} />
           <Route path="/settings" element={<SimpleSettings />} />
         </Routes>
       </AppLayout>

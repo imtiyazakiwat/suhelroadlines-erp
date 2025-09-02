@@ -43,6 +43,7 @@ const ReportsPage = () => {
     date: '',
     vehicleNumber: '',
     strNumber: '',
+    vehicleType: 'lorry',
     villages: [],
     quantity: '',
     driverName: '',
@@ -200,7 +201,9 @@ const ReportsPage = () => {
       'SL Number': trip.slNumber,
       'Date': formatDate(trip.date),
       'Vehicle Number': trip.vehicleNumber,
+      'Vehicle Type': trip.vehicleType || 'lorry',
       'STR Number': trip.strNumber,
+      'STR Status': trip.strStatus || 'not received',
       'Villages': trip.villages?.join('; ') || '',
       'Quantity': trip.quantity || 0,
       'Driver Name': trip.driverName || '',
@@ -321,6 +324,7 @@ const ReportsPage = () => {
       date: formattedDate,
       vehicleNumber: trip.vehicleNumber,
       strNumber: trip.strNumber,
+      vehicleType: trip.vehicleType || 'lorry',
       villages: trip.villages || [],
       quantity: trip.quantity,
       driverName: trip.driverName,
@@ -408,6 +412,7 @@ const ReportsPage = () => {
         date: new Date(editFormData.date),
         vehicleNumber: editFormData.vehicleNumber.trim(),
         strNumber: editFormData.strNumber.trim(),
+        vehicleType: editFormData.vehicleType,
         villages: editFormData.villages,
         quantity: parseFloat(editFormData.quantity),
         driverName: editFormData.driverName.trim(),
@@ -471,7 +476,9 @@ const ReportsPage = () => {
     { label: 'SL Number', key: 'SL Number' },
     { label: 'Date', key: 'Date' },
     { label: 'Vehicle Number', key: 'Vehicle Number' },
+    { label: 'Vehicle Type', key: 'Vehicle Type' },
     { label: 'STR Number', key: 'STR Number' },
+    { label: 'STR Status', key: 'STR Status' },
     { label: 'Villages', key: 'Villages' },
     { label: 'Quantity', key: 'Quantity' },
     { label: 'Driver Name', key: 'Driver Name' },
@@ -700,6 +707,19 @@ const ReportsPage = () => {
                           </div>
                         )}
                         <button
+                          className="btn-icon str-status-btn"
+                          onClick={() => handleEditTrip(trip)}
+                          title="Update STR Status"
+                        >
+                          <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14,2 14,8 20,8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10,9 9,9 8,9"></polyline>
+                          </svg>
+                        </button>
+                        <button
                           className="btn-icon edit-trip-btn"
                           onClick={() => handleEditTrip(trip)}
                           title="Edit Trip"
@@ -716,6 +736,11 @@ const ReportsPage = () => {
                         <div className="detail-item">
                           <span className="detail-label">STR</span>
                           <span className="detail-value">{trip.strNumber}</span>
+                          <span className="str-status">{trip.strStatus || 'not received'}</span>
+                        </div>
+                        <div className="detail-item">
+                          <span className="detail-label">Vehicle Type</span>
+                          <span className="detail-value">{trip.vehicleType || 'lorry'}</span>
                         </div>
                         <div className="detail-item">
                           <span className="detail-label">Quantity</span>
@@ -841,13 +866,29 @@ const ReportsPage = () => {
               </div>
 
               <div className="form-group">
-                <label className="form-label">STR Number</label>
-                <input
-                  type="text"
+                <label className="form-label">Vehicle Type</label>
+                <select
+                  value={editFormData.vehicleType}
+                  onChange={(e) => handleEditInputChange('vehicleType', e.target.value)}
+                  className={`form-input ${editErrors.vehicleType ? 'error' : ''}`}
+                >
+                  <option value="lorry">Lorry</option>
+                  <option value="tempo">Tempo</option>
+                  <option value="pickup">Pickup</option>
+                </select>
+                {editErrors.vehicleType && <span className="error-text">{editErrors.vehicleType}</span>}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">STR Status</label>
+                <select
                   value={editFormData.strNumber}
                   onChange={(e) => handleEditInputChange('strNumber', e.target.value)}
                   className={`form-input ${editErrors.strNumber ? 'error' : ''}`}
-                />
+                >
+                  <option value="not received">Not Received</option>
+                  <option value="Received">Received</option>
+                </select>
                 {editErrors.strNumber && <span className="error-text">{editErrors.strNumber}</span>}
               </div>
 

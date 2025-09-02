@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { tripService, vehicleService, villageService } from '../../services/firebaseService';
 import { createTripEntry } from '../../types';
@@ -12,7 +12,8 @@ const AddEntryForm = () => {
     slNumber: '',
     date: format(new Date(), 'yyyy-MM-dd'),
     vehicleNumber: '',
-    strNumber: '',
+    strNumber: 'not received',
+    vehicleType: 'lorry',
     villages: [],
     quantity: '',
     driverName: '',
@@ -32,11 +33,27 @@ const AddEntryForm = () => {
   const [errors, setErrors] = useState({});
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
+  
+  // Refs for cleanup
+  const toastTimeoutRef = useRef(null);
+  const navigationTimeoutRef = useRef(null);
 
   useEffect(() => {
     initializeForm();
     loadVehicles();
     loadVillages();
+  }, []);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+      if (navigationTimeoutRef.current) {
+        clearTimeout(navigationTimeoutRef.current);
+      }
+    };
   }, []);
 
   const initializeForm = async () => {
@@ -72,6 +89,11 @@ const AddEntryForm = () => {
   };
 
   const handleInputChange = (field, value) => {
+    // Log dropdown changes for vehicleType and strNumber (STR Status)
+    if (field === 'vehicleType' || field === 'strNumber') {
+      console.log(`${field} changed to:`, value);
+    }
+    
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -182,8 +204,12 @@ const AddEntryForm = () => {
       newErrors.vehicleNumber = 'Vehicle number is required';
     }
     
-    if (!formData.strNumber.trim()) {
-      newErrors.strNumber = 'STR number is required';
+    if (!formData.strNumber || !formData.strNumber.trim()) {
+      newErrors.strNumber = 'STR status is required';
+    }
+    
+    if (!formData.vehicleType) {
+      newErrors.vehicleType = 'Vehicle type is required';
     }
     
     if (formData.villages.length === 0) {
@@ -223,11 +249,18 @@ const AddEntryForm = () => {
     setLoading(true);
     
     try {
+      // Log form data before submission
+      console.log('Submitting trip data:', {
+        vehicleType: formData.vehicleType,
+        strStatus: formData.strNumber
+      });
+      
       const tripData = createTripEntry({
         slNumber: parseInt(formData.slNumber),
         date: new Date(formData.date),
         vehicleNumber: formData.vehicleNumber.trim(),
         strNumber: formData.strNumber.trim(),
+        vehicleType: formData.vehicleType,
         villages: formData.villages,
         quantity: parseFloat(formData.quantity),
         driverName: formData.driverName.trim(),
@@ -235,6 +268,7 @@ const AddEntryForm = () => {
         advanceAmount: parseFloat(formData.advanceAmount) || 0
       });
       
+      console.log('Created trip entry:', tripData);
       await tripService.addTrip(tripData);
       
       // Update vehicle information if changed
@@ -253,7 +287,7 @@ const AddEntryForm = () => {
       showToastMessage('Trip entry added successfully!');
       
       // Navigate back after success
-      setTimeout(() => {
+      navigationTimeoutRef.current = setTimeout(() => {
         navigate('/');
       }, 1500);
       
@@ -268,7 +302,16 @@ const AddEntryForm = () => {
   const showToastMessage = (message) => {
     setToastMessage(message);
     setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
+    
+    // Clear existing toast timeout
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    
+    // Set new timeout
+    toastTimeoutRef.current = setTimeout(() => {
+      setShowToast(false);
+    }, 3000);
   };
 
   return (
@@ -356,17 +399,33 @@ const AddEntryForm = () => {
           {errors.vehicleNumber && <span className="error-text">{errors.vehicleNumber}</span>}
         </div>
 
-        {/* STR Number */}
+        {/* STR Status */}
         <div className="form-group">
-          <label className="form-label">STR Number</label>
-          <input
-            type="text"
+          <label className="form-label">STR Status</label>
+          <select
             value={formData.strNumber}
             onChange={(e) => handleInputChange('strNumber', e.target.value)}
-            placeholder="Enter STR number"
             className={`form-input ${errors.strNumber ? 'error' : ''}`}
-          />
+          >
+            <option value="not received">Not Received</option>
+            <option value="Received">Received</option>
+          </select>
           {errors.strNumber && <span className="error-text">{errors.strNumber}</span>}
+        </div>
+        
+        {/* Vehicle Type */}
+        <div className="form-group">
+          <label className="form-label">Vehicle Type</label>
+          <select
+            value={formData.vehicleType}
+            onChange={(e) => handleInputChange('vehicleType', e.target.value)}
+            className={`form-input ${errors.vehicleType ? 'error' : ''}`}
+          >
+            <option value="lorry">Lorry</option>
+            <option value="tempo">Tempo</option>
+            <option value="pickup">Pickup</option>
+          </select>
+          {errors.vehicleType && <span className="error-text">{errors.vehicleType}</span>}
         </div>
 
         {/* Villages */}

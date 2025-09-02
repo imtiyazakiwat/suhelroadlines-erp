@@ -40,7 +40,8 @@ const Settings = () => {
   const [vehicleForm, setVehicleForm] = useState({
     vehicleNumber: '',
     driverName: '',
-    mobileNumber: ''
+    mobileNumber: '',
+    vehicleType: 'lorry'
   });
   const [editingVehicle, setEditingVehicle] = useState(null);
   const [vehicleErrors, setVehicleErrors] = useState({});
@@ -93,14 +94,16 @@ const Settings = () => {
       setVehicleForm({
         vehicleNumber: vehicle.vehicleNumber,
         driverName: vehicle.driverName || '',
-        mobileNumber: vehicle.mobileNumber || ''
+        mobileNumber: vehicle.mobileNumber || '',
+        vehicleType: vehicle.vehicleType || 'lorry'
       });
     } else {
       setEditingVehicle(null);
       setVehicleForm({
         vehicleNumber: '',
         driverName: '',
-        mobileNumber: ''
+        mobileNumber: '',
+        vehicleType: 'lorry'
       });
     }
     setVehicleErrors({});
@@ -124,6 +127,12 @@ const Settings = () => {
       errors.mobileNumber = 'Valid 10-digit mobile number is required';
     }
     
+    if (!vehicleForm.vehicleType) {
+      errors.vehicleType = 'Vehicle type is required';
+    } else if (!['lorry', 'tempo', 'pickup'].includes(vehicleForm.vehicleType)) {
+      errors.vehicleType = 'Invalid vehicle type';
+    }
+    
     setVehicleErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -141,8 +150,11 @@ const Settings = () => {
         vehicleNumber: vehicleForm.vehicleNumber.trim(),
         driverName: vehicleForm.driverName.trim(),
         mobileNumber: vehicleForm.mobileNumber.trim(),
+        vehicleType: vehicleForm.vehicleType,
         isActive: true
       };
+      
+      console.log('Saving vehicle data:', vehicleData);
       
       if (editingVehicle) {
         await vehicleService.updateVehicle(editingVehicle.vehicleNumber, vehicleData);
@@ -379,6 +391,9 @@ END:VCARD`;
                           <div className="item-inner">
                             <div className="item-title-row">
                               <div className="item-title">{vehicle.vehicleNumber}</div>
+                              <div className="item-after">
+                                <span className="vehicle-type-badge">{vehicle.vehicleType || 'lorry'}</span>
+                              </div>
                             </div>
                             <div className="item-subtitle">
                               {vehicle.driverName} • {vehicle.mobileNumber}
@@ -548,6 +563,19 @@ END:VCARD`;
                 errorMessage={vehicleErrors.mobileNumber}
                 errorMessageForce={!!vehicleErrors.mobileNumber}
               />
+              
+              <ListInput
+                label="Vehicle Type"
+                type="select"
+                value={vehicleForm.vehicleType}
+                onChange={(e) => setVehicleForm(prev => ({ ...prev, vehicleType: e.target.value }))}
+                errorMessage={vehicleErrors.vehicleType}
+                errorMessageForce={!!vehicleErrors.vehicleType}
+              >
+                <option value="lorry">Lorry</option>
+                <option value="tempo">Tempo</option>
+                <option value="pickup">Pickup</option>
+              </ListInput>
             </List>
             
             <div className="form-actions">

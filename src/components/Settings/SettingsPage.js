@@ -18,6 +18,7 @@ const SettingsPage = () => {
     vehicleNumber: '',
     driverName: '',
     mobileNumber: '',
+    vehicleType: 'lorry',
     isActive: true
   });
   const [editingVehicle, setEditingVehicle] = useState(null);
@@ -76,6 +77,12 @@ const SettingsPage = () => {
       errors.mobileNumber = 'Valid 10-digit mobile number is required';
     }
     
+    if (!vehicleForm.vehicleType) {
+      errors.vehicleType = 'Vehicle type is required';
+    } else if (!['lorry', 'tempo', 'pickup'].includes(vehicleForm.vehicleType)) {
+      errors.vehicleType = 'Invalid vehicle type';
+    }
+    
     setVehicleErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -110,6 +117,7 @@ const SettingsPage = () => {
       vehicleNumber: vehicle.vehicleNumber,
       driverName: vehicle.driverName || '',
       mobileNumber: vehicle.mobileNumber || '',
+      vehicleType: vehicle.vehicleType || 'lorry',
       isActive: vehicle.isActive !== false
     });
     setEditingVehicle(vehicle);
@@ -136,6 +144,7 @@ const SettingsPage = () => {
       vehicleNumber: '',
       driverName: '',
       mobileNumber: '',
+      vehicleType: 'lorry',
       isActive: true
     });
     setEditingVehicle(null);
@@ -342,6 +351,22 @@ const SettingsPage = () => {
                   </div>
                   
                   <div className="form-group">
+                    <label className="form-label">Vehicle Type</label>
+                    <select
+                      value={vehicleForm.vehicleType}
+                      onChange={(e) => setVehicleForm(prev => ({ ...prev, vehicleType: e.target.value }))}
+                      className={`form-input ${vehicleErrors.vehicleType ? 'error' : ''}`}
+                    >
+                      <option value="lorry">Lorry</option>
+                      <option value="tempo">Tempo</option>
+                      <option value="pickup">Pickup</option>
+                    </select>
+                    {vehicleErrors.vehicleType && <span className="error-text">{vehicleErrors.vehicleType}</span>}
+                  </div>
+                </div>
+                
+                <div className="form-row">
+                  <div className="form-group">
                     <label className="form-label">Status</label>
                     <div className="toggle-group">
                       <label className="toggle-label">
@@ -394,6 +419,7 @@ const SettingsPage = () => {
                   <div className="table">
                     <div className="table-header">
                       <div>Vehicle</div>
+                      <div>Type</div>
                       <div>Driver</div>
                       <div>Mobile</div>
                       <div>Status</div>
@@ -402,6 +428,11 @@ const SettingsPage = () => {
                     {vehicles.map((vehicle) => (
                       <div key={vehicle.id} className={`table-row ${!vehicle.isActive ? 'inactive' : ''}`}>
                         <div className="cell-vehicle">{vehicle.vehicleNumber}</div>
+                        <div>
+                          <span className={`vehicle-type-badge ${vehicle.vehicleType || 'lorry'}`}>
+                            {vehicle.vehicleType || 'lorry'}
+                          </span>
+                        </div>
                         <div>{vehicle.driverName || 'N/A'}</div>
                         <div>{vehicle.mobileNumber || 'N/A'}</div>
                         <div>

@@ -68,6 +68,7 @@ const Reports = () => {
     date: '',
     vehicleNumber: '',
     strNumber: '',
+    vehicleType: 'lorry',
     villages: [],
     quantity: '',
     driverName: '',
@@ -82,7 +83,9 @@ const Reports = () => {
       'SL Number': trip.slNumber,
       'Date': formatDate(trip.date),
       'Vehicle Number': trip.vehicleNumber,
+      'Vehicle Type': trip.vehicleType || 'lorry',
       'STR Number': trip.strNumber,
+      'STR Status': trip.strStatus || 'not received',
       'Villages': trip.villages?.join('; ') || '',
       'Quantity': trip.quantity || 0,
       'Driver Name': trip.driverName || '',
@@ -309,6 +312,10 @@ const Reports = () => {
 
   // Edit trip functions
   const handleEditTrip = (trip) => {
+    console.log('Editing trip:', trip);
+    console.log('Vehicle type:', trip.vehicleType);
+    console.log('STR status:', trip.strStatus);
+    
     setEditingTrip(trip);
     
     // Safely format the date
@@ -329,6 +336,7 @@ const Reports = () => {
       date: formattedDate,
       vehicleNumber: trip.vehicleNumber,
       strNumber: trip.strNumber,
+      vehicleType: trip.vehicleType || 'lorry',
       villages: trip.villages || [],
       quantity: trip.quantity,
       driverName: trip.driverName,
@@ -425,6 +433,7 @@ const Reports = () => {
         date: new Date(editFormData.date),
         vehicleNumber: editFormData.vehicleNumber.trim(),
         strNumber: editFormData.strNumber.trim(),
+        vehicleType: editFormData.vehicleType,
         villages: editFormData.villages,
         quantity: parseFloat(editFormData.quantity),
         driverName: editFormData.driverName.trim(),
@@ -488,7 +497,9 @@ const Reports = () => {
     { label: 'SL Number', key: 'SL Number' },
     { label: 'Date', key: 'Date' },
     { label: 'Vehicle Number', key: 'Vehicle Number' },
+    { label: 'Vehicle Type', key: 'Vehicle Type' },
     { label: 'STR Number', key: 'STR Number' },
+    { label: 'STR Status', key: 'STR Status' },
     { label: 'Villages', key: 'Villages' },
     { label: 'Quantity', key: 'Quantity' },
     { label: 'Driver Name', key: 'Driver Name' },
@@ -658,6 +669,12 @@ const Reports = () => {
                               <Badge color="orange">{trip.advanceCount} advances</Badge>
                             )}
                             <Button
+                              className="str-status-btn"
+                              onClick={() => handleEditTrip(trip)}
+                            >
+                              <Icon ios="f7:doc_text" />
+                            </Button>
+                            <Button
                               className="edit-trip-btn"
                               onClick={() => handleEditTrip(trip)}
                             >
@@ -669,6 +686,11 @@ const Reports = () => {
                           <div className="detail-row">
                             <span className="label">STR:</span>
                             <span className="value">{trip.strNumber}</span>
+                            <span className="str-status">{trip.strStatus || 'not received'}</span>
+                          </div>
+                          <div className="detail-row">
+                            <span className="label">Vehicle Type:</span>
+                            <span className="value">{trip.vehicleType || 'lorry'}</span>
                           </div>
                           <div className="detail-row">
                             <span className="label">Villages:</span>
@@ -802,15 +824,38 @@ const Reports = () => {
                 errorMessageForce={!!editErrors.vehicleNumber}
               />
               
+              {/* Vehicle Type */}
+              <ListItem className="vehicle-type-section">
+                <div className="vehicle-type-label">Vehicle Type</div>
+                <select
+                  value={editFormData.vehicleType}
+                  onChange={(e) => handleEditInputChange('vehicleType', e.target.value)}
+                  className={`form-input ${editErrors.vehicleType ? 'error' : ''}`}
+                >
+                  <option value="lorry">Lorry</option>
+                  <option value="tempo">Tempo</option>
+                  <option value="pickup">Pickup</option>
+                </select>
+                {editErrors.vehicleType && (
+                  <div className="error-message">{editErrors.vehicleType}</div>
+                )}
+              </ListItem>
+              
               {/* STR Number */}
-              <ListInput
-                label="STR Number"
-                type="text"
-                value={editFormData.strNumber}
-                onChange={(e) => handleEditInputChange('strNumber', e.target.value)}
-                errorMessage={editErrors.strNumber}
-                errorMessageForce={!!editErrors.strNumber}
-              />
+              <ListItem className="str-number-section">
+                <div className="str-label">STR Status</div>
+                <select
+                  value={editFormData.strNumber}
+                  onChange={(e) => handleEditInputChange('strNumber', e.target.value)}
+                  className={`form-input ${editErrors.strNumber ? 'error' : ''}`}
+                >
+                  <option value="not received">Not Received</option>
+                  <option value="Received">Received</option>
+                </select>
+                {editErrors.strNumber && (
+                  <div className="error-message">{editErrors.strNumber}</div>
+                )}
+              </ListItem>
               
               {/* Villages */}
               <ListItem className="villages-section">
