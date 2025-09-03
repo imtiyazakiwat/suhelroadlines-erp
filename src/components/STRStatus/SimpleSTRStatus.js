@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { tripService } from '../../services/firebaseService';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import Toast from '../Common/Toast';
@@ -23,7 +23,7 @@ const SimpleSTRStatus = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [filters.dateFrom, filters.dateTo]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -34,15 +34,15 @@ const SimpleSTRStatus = () => {
     };
   }, []);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      
+
       // Load trips for the current month by default
       const startDate = new Date(filters.dateFrom);
       const endDate = new Date(filters.dateTo);
       endDate.setHours(23, 59, 59, 999); // End of day
-      
+
       const tripsData = await tripService.getTripsByDateRange(startDate, endDate);
       setTrips(tripsData);
     } catch (error) {
@@ -51,7 +51,7 @@ const SimpleSTRStatus = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters.dateFrom, filters.dateTo]);
 
   const handleFilterChange = (field, value) => {
     setFilters(prev => ({

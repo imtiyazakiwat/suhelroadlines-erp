@@ -29,7 +29,6 @@ const ReportsPage = () => {
   
   // eslint-disable-next-line no-unused-vars
   const [vehicles, setVehicles] = useState([]);
-  const [allVillages, setAllVillages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
@@ -60,7 +59,7 @@ const ReportsPage = () => {
         villageService.getAllVillages()
       ]);
       setVehicles(vehicleList);
-      setAllVillages(villageList);
+      // Removed setAllVillages since allVillages state was removed
     } catch (error) {
       console.error('Error loading initial data:', error);
     }
