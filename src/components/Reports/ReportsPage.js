@@ -680,7 +680,7 @@ const ReportsPage = () => {
               <p>Loading data...</p>
             </div>
           ) : activeTab === 'trips' ? (
-            <div className="trips-list">
+            <div className="trips-table-container">
               {data.trips.length === 0 ? (
                 <div className="empty-state">
                   <svg className="icon-xl" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -692,82 +692,77 @@ const ReportsPage = () => {
                   <p>Try adjusting your filters to see more results</p>
                 </div>
               ) : (
-                data.trips.map((trip) => (
-                  <div key={trip.id} className="trip-item">
-                    <div className="trip-header">
-                      <div className="trip-info">
-                        <span className="trip-sl">#{trip.slNumber}</span>
-                        <span className="trip-vehicle">{trip.vehicleNumber}</span>
-                        <span className="trip-date">{formatDate(trip.date)}</span>
-                      </div>
-                      <div className="trip-actions">
-                        {trip.advanceCount > 0 && (
-                          <div className="advance-badge">
-                            {trip.advanceCount} advance{trip.advanceCount > 1 ? 's' : ''}
-                          </div>
-                        )}
-                        <button
-                          className="btn-icon str-status-btn"
-                          onClick={() => handleEditTrip(trip)}
-                          title="Update STR Status"
-                        >
-                          <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14,2 14,8 20,8"></polyline>
-                            <line x1="16" y1="13" x2="8" y2="13"></line>
-                            <line x1="16" y1="17" x2="8" y2="17"></line>
-                            <polyline points="10,9 9,9 8,9"></polyline>
-                          </svg>
-                        </button>
-                        <button
-                          className="btn-icon edit-trip-btn"
-                          onClick={() => handleEditTrip(trip)}
-                          title="Edit Trip"
-                        >
-                          <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                    <div className="trip-details">
-                      <div className="detail-grid">
-                        <div className="detail-item">
-                          <span className="detail-label">STR</span>
-                          <span className="detail-value">{trip.strNumber}</span>
-                          <span className="str-status">{trip.strStatus || 'not received'}</span>
-                        </div>
-                        <div className="detail-item">
-                          <span className="detail-label">Vehicle Type</span>
-                          <span className="detail-value">{trip.vehicleType || 'lorry'}</span>
-                        </div>
-                        <div className="detail-item">
-                          <span className="detail-label">Quantity</span>
-                          <span className="detail-value">{trip.quantity}</span>
-                        </div>
-                        <div className="detail-item">
-                          <span className="detail-label">Driver</span>
-                          <span className="detail-value">{trip.driverName}</span>
-                        </div>
-                        <div className="detail-item">
-                          <span className="detail-label">Total Advances</span>
-                          <span className="detail-value advance-amount">
-                            {formatCurrency(trip.advanceAmount || 0)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="villages-row">
-                        <span className="detail-label">Villages:</span>
-                        <div className="villages-list">
-                          {trip.villages?.map((village, index) => (
-                            <span key={index} className="village-tag">{village}</span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))
+                <div className="table-responsive">
+                  <table className="trips-table">
+                    <thead>
+                      <tr>
+                        <th className="col-sl">SL</th>
+                        <th className="col-date">Date</th>
+                        <th className="col-vehicle">Vehicle</th>
+                        <th className="col-type">Type</th>
+                        <th className="col-str">STR Status</th>
+                        <th className="col-villages">Villages</th>
+                        <th className="col-quantity">Quantity</th>
+                        <th className="col-driver">Driver</th>
+                        <th className="col-advances">Advances</th>
+                        <th className="col-actions">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.trips.map((trip) => (
+                        <tr key={trip.id}>
+                          <td className="col-sl">
+                            <span className="sl-number">#{trip.slNumber}</span>
+                          </td>
+                          <td className="col-date">{formatDate(trip.date)}</td>
+                          <td className="col-vehicle">
+                            <div className="vehicle-info">
+                              <span className="vehicle-number">{trip.vehicleNumber}</span>
+                              {trip.driverName && (
+                                <span className="driver-name">• {trip.driverName}</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="col-type">{trip.vehicleType || 'lorry'}</td>
+                          <td className="col-str">
+                            <span className={`str-status-badge ${trip.strStatus === 'Received' ? 'received' : 'not-received'}`}>
+                              {trip.strStatus || 'not received'}
+                            </span>
+                          </td>
+                          <td className="col-villages">
+                            <div className="villages-cell">
+                              {trip.villages?.map((village, index) => (
+                                <span key={index} className="village-chip">{village}</span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="col-quantity">{trip.quantity || '-'}</td>
+                          <td className="col-driver">{trip.driverName || '-'}</td>
+                          <td className="col-advances">
+                            <div className="advances-info">
+                              <span className="advance-amount">{formatCurrency(trip.advanceAmount || 0)}</span>
+                              {trip.advanceCount > 0 && (
+                                <span className="advance-count">({trip.advanceCount})</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="col-actions">
+                            <button
+                              className="btn-icon edit-trip-btn"
+                              onClick={() => handleEditTrip(trip)}
+                              title="Edit Trip"
+                            >
+                              <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                              </svg>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           ) : (

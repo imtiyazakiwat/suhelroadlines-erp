@@ -218,44 +218,66 @@ const SimpleSTRStatus = () => {
               <div className="loading-shimmer" style={{ height: 60 }}></div>
             </div>
           ) : (
-            <div className="trips-list">
+            <div className="table-responsive">
               {trips.length === 0 ? (
-                <div className="no-trips-message">No trips found for the selected filters</div>
+                <div className="empty-state">
+                  <svg className="icon-xl" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2z"></path>
+                    <line x1="8" y1="1" x2="8" y2="4"></line>
+                    <line x1="16" y1="1" x2="16" y2="4"></line>
+                  </svg>
+                  <h3>No trips found</h3>
+                  <p>Try adjusting your filters to see more results</p>
+                </div>
               ) : (
-                trips.map((trip) => (
-                  <div key={trip.id} className="trip-item">
-                    <div className="trip-header">
-                      <div className="trip-title">
-                        <span className="trip-sl">#{trip.slNumber}</span>
-                        <span className="trip-vehicle">{trip.vehicleNumber}</span>
-                        <span className="trip-date">{formatDate(trip.date)}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="str-status-row">
-                      <div className="str-label">STR Status:</div>
-                      <select
-                        value={trip.strStatus || 'not received'}
-                        onChange={(e) => handleSTRStatusChange(trip.id, e.target.value)}
-                        className={`str-status-select ${(trip.strStatus || 'not received') === 'Received' ? 'received' : 'not-received'}`}
-                      >
-                        <option value="not received">Not Received</option>
-                        <option value="Received">Received</option>
-                      </select>
-                    </div>
-                    
-                    <div className="trip-details">
-                      <div className="detail-row">
-                        <span className="label">STR Number:</span>
-                        <span className="value">{trip.strNumber || 'N/A'}</span>
-                      </div>
-                      <div className="detail-row">
-                        <span className="label">Villages:</span>
-                        <span className="value">{trip.villages?.join(', ') || 'N/A'}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))
+                <table className="str-status-table">
+                  <thead>
+                    <tr>
+                      <th className="col-sl">SL</th>
+                      <th className="col-date">Date</th>
+                      <th className="col-vehicle">Vehicle & Driver</th>
+                      <th className="col-str-status">STR Status</th>
+                      <th className="col-actions">Quick Edit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trips.map((trip) => (
+                      <tr key={trip.id}>
+                        <td className="col-sl">
+                          <span className="sl-number">#{trip.slNumber}</span>
+                        </td>
+                        <td className="col-date">{formatDate(trip.date)}</td>
+                        <td className="col-vehicle">
+                          <div className="vehicle-info">
+                            <span className="vehicle-number">{trip.vehicleNumber}</span>
+                            {trip.driverName && (
+                              <span className="driver-name">• {trip.driverName}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="col-str-status">
+                          <select
+                            value={trip.strStatus || 'not received'}
+                            onChange={(e) => handleSTRStatusChange(trip.id, e.target.value)}
+                            className={`str-status-select ${(trip.strStatus || 'not received') === 'Received' ? 'received' : 'not-received'}`}
+                          >
+                            <option value="not received">Not Received</option>
+                            <option value="Received">Received</option>
+                          </select>
+                        </td>
+                        <td className="col-actions">
+                          <div className="status-indicator">
+                            {trip.strStatus === 'Received' ? (
+                              <span className="status-dot received" title="STR Received"></span>
+                            ) : (
+                              <span className="status-dot pending" title="STR Pending"></span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </div>
           )}

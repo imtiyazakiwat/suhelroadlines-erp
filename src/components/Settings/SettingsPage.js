@@ -415,38 +415,51 @@ const SettingsPage = () => {
                   <p>Add your first vehicle using the form above</p>
                 </div>
               ) : (
-                <div className="responsive-table">
-                  <div className="table">
-                    <div className="table-header">
-                      <div>Vehicle</div>
-                      <div>Type</div>
-                      <div>Driver</div>
-                      <div>Mobile</div>
-                      <div>Status</div>
-                      <div>Actions</div>
-                    </div>
-                    {vehicles.map((vehicle) => (
-                      <div key={vehicle.id} className={`table-row ${!vehicle.isActive ? 'inactive' : ''}`}>
-                        <div className="cell-vehicle">{vehicle.vehicleNumber}</div>
-                        <div>
-                          <span className={`vehicle-type-badge ${vehicle.vehicleType || 'lorry'}`}>
-                            {vehicle.vehicleType || 'lorry'}
-                          </span>
-                        </div>
-                        <div>{vehicle.driverName || 'N/A'}</div>
-                        <div>{vehicle.mobileNumber || 'N/A'}</div>
-                        <div>
-                          <span className={`status-badge ${vehicle.isActive ? 'active' : 'inactive'}`}>
-                            {vehicle.isActive ? 'Active' : 'Inactive'}
-                          </span>
-                        </div>
-                        <div className="row-actions">
-                          <button onClick={() => editVehicle(vehicle)} className="btn btn-ghost btn-sm">Edit</button>
-                          <button onClick={() => deleteVehicle(vehicle.id)} className="btn btn-ghost btn-sm delete-btn">Delete</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                <div className="table-responsive">
+                  <table className="vehicles-table">
+                    <thead>
+                      <tr>
+                        <th className="col-vehicle">Vehicle</th>
+                        <th className="col-type">Type</th>
+                        <th className="col-driver">Driver</th>
+                        <th className="col-mobile">Mobile</th>
+                        <th className="col-status">Status</th>
+                        <th className="col-actions">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {vehicles.map((vehicle) => (
+                        <tr key={vehicle.id} className={!vehicle.isActive ? 'inactive' : ''}>
+                          <td className="col-vehicle">
+                            <div className="vehicle-info">
+                              <span className="vehicle-number">{vehicle.vehicleNumber}</span>
+                              {vehicle.driverName && (
+                                <span className="driver-name">• {vehicle.driverName}</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="col-type">
+                            <span className={`vehicle-type-badge ${vehicle.vehicleType || 'lorry'}`}>
+                              {vehicle.vehicleType || 'lorry'}
+                            </span>
+                          </td>
+                          <td className="col-driver">{vehicle.driverName || 'N/A'}</td>
+                          <td className="col-mobile">{vehicle.mobileNumber || 'N/A'}</td>
+                          <td className="col-status">
+                            <span className={`status-badge ${vehicle.isActive ? 'active' : 'inactive'}`}>
+                              {vehicle.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="col-actions">
+                            <div className="row-actions">
+                              <button onClick={() => editVehicle(vehicle)} className="btn btn-ghost btn-sm">Edit</button>
+                              <button onClick={() => deleteVehicle(vehicle.id)} className="btn btn-ghost btn-sm delete-btn">Delete</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>

@@ -217,32 +217,42 @@ const VillageList = ({ onEdit, onDelete, refreshTrigger }) => {
           </p>
         </div>
       ) : (
-        <div className="responsive-table">
-          <div className="table">
-            <div className="table-header">
-              <div>Village</div>
-              <div>Usage</div>
-              <div>Last Used</div>
-              <div>Status</div>
-              <div>Actions</div>
-            </div>
-            {filteredVillages.map((village) => (
-              <div key={village.id} className={`table-row ${!village.isActive ? 'inactive' : ''}`}>
-                <div className="cell-name">{village.villageName}</div>
-                <div>{village.usageCount || 0}</div>
-                <div>{village.lastUsed ? new Date(village.lastUsed.toDate?.() || village.lastUsed).toLocaleDateString() : '-'}</div>
-                <div>
-                  <span className={`status-badge ${village.isActive ? 'active' : 'inactive'}`}>
-                    {village.isActive ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-                <div className="row-actions">
-                  <button onClick={() => handleEdit(village)} className="btn btn-ghost btn-sm">Edit</button>
-                  <button onClick={() => handleDelete(village)} className="btn btn-ghost btn-sm delete-btn">Delete</button>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="table-responsive">
+          <table className="villages-table">
+            <thead>
+              <tr>
+                <th className="col-village">Village</th>
+                <th className="col-usage">Usage</th>
+                <th className="col-last-used">Last Used</th>
+                <th className="col-status">Status</th>
+                <th className="col-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredVillages.map((village) => (
+                <tr key={village.id} className={!village.isActive ? 'inactive' : ''}>
+                  <td className="col-village">
+                    <span className="village-name">{village.villageName}</span>
+                  </td>
+                  <td className="col-usage">{village.usageCount || 0}</td>
+                  <td className="col-last-used">
+                    {village.lastUsed ? new Date(village.lastUsed.toDate?.() || village.lastUsed).toLocaleDateString() : '-'}
+                  </td>
+                  <td className="col-status">
+                    <span className={`status-badge ${village.isActive ? 'active' : 'inactive'}`}>
+                      {village.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="col-actions">
+                    <div className="row-actions">
+                      <button onClick={() => handleEdit(village)} className="btn btn-ghost btn-sm">Edit</button>
+                      <button onClick={() => handleDelete(village)} className="btn btn-ghost btn-sm delete-btn">Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
           {displayCount < filteredAndSortedVillages.length && (
             <div className="load-more-container">
               <button onClick={loadMore} className="btn btn-secondary">

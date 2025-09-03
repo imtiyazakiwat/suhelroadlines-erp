@@ -216,9 +216,7 @@ const AddEntryForm = () => {
       newErrors.villages = 'At least one village is required';
     }
     
-    if (!formData.quantity || parseFloat(formData.quantity) <= 0) {
-      newErrors.quantity = 'Valid quantity is required';
-    }
+    // Quantity is now optional - no validation required
     
     if (!formData.driverName.trim()) {
       newErrors.driverName = 'Driver name is required';
@@ -499,15 +497,15 @@ const AddEntryForm = () => {
           {errors.villages && <span className="error-text">{errors.villages}</span>}
         </div>
 
-        {/* Quantity */}
+        {/* Quantity (Optional Notes) */}
         <div className="form-group">
-          <label className="form-label">Quantity</label>
+          <label className="form-label">Quantity/Notes</label>
           <input
             type="number"
             step="0.01"
             value={formData.quantity}
             onChange={(e) => handleInputChange('quantity', e.target.value)}
-            placeholder="Enter quantity"
+            placeholder="Enter quantity or notes (optional)"
             className={`form-input ${errors.quantity ? 'error' : ''}`}
           />
           {errors.quantity && <span className="error-text">{errors.quantity}</span>}

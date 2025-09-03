@@ -123,116 +123,137 @@
   font-weight: var(--font-medium);
 }
 
-/* Village Grid */
-.village-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--space-4);
-  margin-bottom: var(--space-6);
+/* Villages Table */
+.table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-.village-card {
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(0, 0, 0, 0.05);
+.villages-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: rgba(255, 255, 255, 0.9);
   border-radius: var(--radius-xl);
-  padding: var(--space-5);
-  transition: all var(--transition-normal);
-  backdrop-filter: var(--blur-md);
-  -webkit-backdrop-filter: var(--blur-md);
-  animation: fadeInUp 0.4s ease-out;
-  animation-fill-mode: both;
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+  margin: 0;
 }
 
-.village-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-  border-color: rgba(139, 90, 156, 0.2);
-}
-
-.village-card.inactive {
-  opacity: 0.6;
-  background: rgba(255, 255, 255, 0.7);
-}
-
-.village-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: var(--space-4);
-  gap: var(--space-3);
-}
-
-.village-name {
-  font-size: var(--text-lg);
-  font-weight: var(--font-bold);
-  color: var(--gray-900);
-  line-height: 1.2;
-  flex: 1;
-}
-
-.village-status {
-  flex-shrink: 0;
-}
-
-.status-badge {
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-full);
-  font-size: var(--text-xs);
-  font-weight: var(--font-bold);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.status-badge.active {
-  background: var(--ios-green);
+.villages-table thead {
+  background: var(--gradient-primary);
   color: white;
 }
 
-.status-badge.inactive {
-  background: var(--gray-300);
-  color: var(--gray-700);
+.villages-table th {
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+  white-space: nowrap;
 }
 
-.village-stats {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: var(--space-4);
-  gap: var(--space-4);
+.villages-table th:first-child {
+  border-top-left-radius: var(--radius-xl);
 }
 
-.stat-item {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  flex: 1;
+.villages-table th:last-child {
+  border-top-right-radius: var(--radius-xl);
 }
 
-.stat-label {
+.villages-table tbody tr {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  transition: all var(--transition-fast);
+}
+
+.villages-table tbody tr:hover {
+  background: rgba(139, 90, 156, 0.05);
+  transform: translateY(-1px);
+}
+
+.villages-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.villages-table tbody tr:last-child td:first-child {
+  border-bottom-left-radius: var(--radius-xl);
+}
+
+.villages-table tbody tr:last-child td:last-child {
+  border-bottom-right-radius: var(--radius-xl);
+}
+
+.villages-table tbody tr.inactive {
+  opacity: 0.6;
+}
+
+.villages-table td {
+  padding: var(--space-4);
+  vertical-align: middle;
+  font-size: var(--text-sm);
+  color: var(--gray-900);
+}
+
+/* Column specific styles */
+.col-village {
+  min-width: 150px;
+}
+
+.col-usage {
+  width: 80px;
+  text-align: center;
+}
+
+.col-last-used {
+  min-width: 100px;
+  white-space: nowrap;
+}
+
+.col-status {
+  width: 80px;
+}
+
+.col-actions {
+  width: 120px;
+  text-align: center;
+}
+
+/* Village name styling */
+.village-name {
+  font-weight: var(--font-bold);
+  color: var(--primary-purple);
+}
+
+/* Status badge */
+.status-badge {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
   font-size: var(--text-xs);
-  color: var(--gray-500);
   font-weight: var(--font-semibold);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  display: inline-block;
 }
 
-.stat-value {
-  font-size: var(--text-sm);
-  color: var(--gray-900);
-  font-weight: var(--font-bold);
+.status-badge.active {
+  background: rgba(40, 167, 69, 0.1);
+  color: #28a745;
+  border: 1px solid rgba(40, 167, 69, 0.3);
 }
 
-.village-actions {
+.status-badge.inactive {
+  background: rgba(220, 53, 69, 0.1);
+  color: #dc3545;
+  border: 1px solid rgba(220, 53, 69, 0.3);
+}
+
+/* Row actions */
+.row-actions {
   display: flex;
   gap: var(--space-2);
-  padding-top: var(--space-3);
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.village-actions .btn {
-  flex: 1;
   justify-content: center;
-  font-size: var(--text-sm);
-  padding: var(--space-2) var(--space-3);
 }
 
 .delete-btn {
@@ -313,67 +334,77 @@
     align-items: stretch;
     gap: var(--space-4);
   }
-  
+
   .search-container {
     min-width: unset;
   }
-  
+
   .sort-controls {
     justify-content: center;
   }
-  
-  .village-grid {
-    grid-template-columns: 1fr;
-    gap: var(--space-3);
+
+  .villages-table {
+    font-size: var(--text-xs);
   }
-  
-  .village-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-2);
+
+  .villages-table th,
+  .villages-table td {
+    padding: var(--space-2) var(--space-3);
   }
-  
-  .village-stats {
-    flex-direction: column;
-    gap: var(--space-3);
+
+  .col-last-used {
+    display: none;
   }
-  
-  .village-actions {
-    flex-direction: column;
-    gap: var(--space-2);
+
+  .col-usage {
+    display: none;
   }
-  
-  .village-actions .btn {
-    flex: none;
+
+  .col-actions {
+    width: 100px;
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 640px) {
+  .col-status {
+    display: none;
+  }
+
   .sort-controls {
     flex-direction: column;
     gap: var(--space-2);
   }
-  
+
   .sort-btn {
     justify-content: center;
     padding: var(--space-3) var(--space-4);
   }
 }
 
+@media (max-width: 480px) {
+  .col-village {
+    min-width: 120px;
+  }
+
+  .village-name {
+    font-size: var(--text-sm);
+  }
+}
+
 /* Focus states for accessibility */
 .search-input:focus-visible,
 .sort-btn:focus-visible,
-.village-card:focus-visible {
+.villages-table tbody tr:focus-visible {
   outline: 2px solid var(--primary-purple);
   outline-offset: 2px;
 }
 
 /* High contrast mode */
 @media (prefers-contrast: high) {
-  .village-card {
-    border-width: 2px;
+  .villages-table {
+    border: 2px solid var(--gray-600);
   }
-  
+
   .sort-btn.active {
     border: 2px solid white;
   }
@@ -381,11 +412,16 @@
 
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  .village-card {
-    animation: none;
+  .villages-table tbody tr {
+    transition: none;
   }
-  
+
+  .villages-table tbody tr:hover {
+    transform: none;
+  }
+
   .village-list-loading .loading {
     animation: none;
   }
 }
+
