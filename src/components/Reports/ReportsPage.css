@@ -275,6 +275,23 @@
   animation: spin 1s linear infinite;
 }
 
+/* Row actions */
+.row-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+}
+
+.delete-trip-btn {
+  color: var(--ios-red) !important;
+  border-color: rgba(255, 59, 48, 0.3) !important;
+}
+
+.delete-trip-btn:hover {
+  background: rgba(255, 59, 48, 0.1) !important;
+  border-color: rgba(255, 59, 48, 0.5) !important;
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
@@ -1194,6 +1211,23 @@
   animation: spin 1s linear infinite;
   display: inline-block;
   margin-right: 8px;
+}
+
+/* Row actions */
+.row-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+}
+
+.delete-trip-btn {
+  color: var(--ios-red) !important;
+  border-color: rgba(255, 59, 48, 0.3) !important;
+}
+
+.delete-trip-btn:hover {
+  background: rgba(255, 59, 48, 0.1) !important;
+  border-color: rgba(255, 59, 48, 0.5) !important;
 }
 
 @keyframes spin {

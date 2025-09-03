@@ -305,7 +305,7 @@ const ReportsPage = () => {
   // Edit trip functions
   const handleEditTrip = (trip) => {
     setEditingTrip(trip);
-    
+
     // Safely format the date
     let formattedDate = '';
     try {
@@ -318,7 +318,7 @@ const ReportsPage = () => {
     } catch (error) {
       console.error('Error formatting date:', error);
     }
-    
+
     setEditFormData({
       slNumber: trip.slNumber,
       date: formattedDate,
@@ -333,6 +333,21 @@ const ReportsPage = () => {
     });
     setEditErrors({});
     setShowEditModal(true);
+  };
+
+  const handleDeleteTrip = async (trip) => {
+    if (!window.confirm(`Are you sure you want to delete Trip #${trip.slNumber} (${trip.vehicleNumber})? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await tripService.deleteTrip(trip.id);
+      showToastMessage('Trip deleted successfully!');
+      loadReportData(); // Refresh the data
+    } catch (error) {
+      console.error('Error deleting trip:', error);
+      showToastMessage('Error deleting trip. Please try again.');
+    }
   };
 
   const handleEditInputChange = (field, value) => {
@@ -747,16 +762,30 @@ const ReportsPage = () => {
                             </div>
                           </td>
                           <td className="col-actions">
-                            <button
-                              className="btn-icon edit-trip-btn"
-                              onClick={() => handleEditTrip(trip)}
-                              title="Edit Trip"
-                            >
-                              <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                              </svg>
-                            </button>
+                            <div className="row-actions">
+                              <button
+                                className="btn-icon edit-trip-btn"
+                                onClick={() => handleEditTrip(trip)}
+                                title="Edit Trip"
+                              >
+                                <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                </svg>
+                              </button>
+                              <button
+                                className="btn-icon delete-trip-btn"
+                                onClick={() => handleDeleteTrip(trip)}
+                                title="Delete Trip"
+                              >
+                                <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                  <path d="M3 6h18"></path>
+                                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 0 2 2v2"></path>
+                                  <line x1="10" y1="11" x2="10" y2="17"></line>
+                                  <line x1="14" y1="11" x2="14" y2="17"></line>
+                                </svg>
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}

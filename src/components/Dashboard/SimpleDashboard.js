@@ -176,7 +176,7 @@ const SimpleDashboard = () => {
               <line x1="12" y1="8" x2="12" y2="16"></line>
               <line x1="8" y1="12" x2="16" y2="12"></line>
             </svg>
-            <span>Add Entry</span>
+            <span>New Trip Entry</span>
           </button>
           
           <button 
@@ -187,7 +187,7 @@ const SimpleDashboard = () => {
               <line x1="12" y1="1" x2="12" y2="23"></line>
               <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
             </svg>
-            <span>Add Advance</span>
+            <span>Add Advance Payment</span>
           </button>
           
           <button 
@@ -199,7 +199,7 @@ const SimpleDashboard = () => {
               <line x1="12" y1="20" x2="12" y2="4"></line>
               <line x1="6" y1="20" x2="6" y2="14"></line>
             </svg>
-            <span>View Reports</span>
+            <span>View Analytics & Reports</span>
           </button>
           
           <button 
@@ -214,6 +214,75 @@ const SimpleDashboard = () => {
           </button>
         </div>
       </div>
+
+      {/* Recent Activity Section */}
+      {(metrics.recentTrips.length > 0 || metrics.recentAdvances.length > 0) && (
+        <div className="recent-activity-card">
+          <h3>Recent Activity</h3>
+          <div className="activity-list">
+            {/* Recent Trips */}
+            {metrics.recentTrips.map((trip) => (
+              <div key={`trip-${trip.id}`} className="activity-item trip-activity">
+                <div className="activity-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M7 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path>
+                    <path d="M17 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path>
+                    <path d="M5 17h-2v-4m-1 -8h11a2 2 0 0 1 2 2v8"></path>
+                  </svg>
+                </div>
+                <div className="activity-content">
+                  <div className="activity-title">
+                    Trip #{trip.slNumber} - {trip.vehicleNumber}
+                    {trip.driverName && <span className="activity-driver"> • {trip.driverName}</span>}
+                  </div>
+                  <div className="activity-details">
+                    <span className="activity-date">
+                      {trip.date ? format(trip.date.toDate ? trip.date.toDate() : new Date(trip.date), 'MMM dd, yyyy') : 'Today'}
+                    </span>
+                    {trip.quantity > 0 && (
+                      <span className="activity-quantity"> • Qty: {trip.quantity}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="activity-status">
+                  <span className={`status-badge ${trip.strStatus === 'Received' ? 'received' : 'pending'}`}>
+                    {trip.strStatus || 'not received'}
+                  </span>
+                </div>
+              </div>
+            ))}
+
+            {/* Recent Advances */}
+            {metrics.recentAdvances.map((advance) => (
+              <div key={`advance-${advance.id}`} className="activity-item advance-activity">
+                <div className="activity-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <line x1="12" y1="1" x2="12" y2="23"></line>
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                  </svg>
+                </div>
+                <div className="activity-content">
+                  <div className="activity-title">
+                    Advance - {advance.vehicleNumber}
+                    {advance.tripId && <span className="activity-trip"> • Trip #{advance.tripId.slice(-4)}</span>}
+                  </div>
+                  <div className="activity-details">
+                    <span className="activity-amount">{formatCurrency(advance.advanceAmount)}</span>
+                    <span className="activity-date">
+                      {advance.createdAt ? format(advance.createdAt.toDate ? advance.createdAt.toDate() : new Date(advance.createdAt), 'MMM dd, HH:mm') : 'Today'}
+                    </span>
+                  </div>
+                </div>
+                <div className="activity-type">
+                  <span className={`type-badge ${advance.advanceType || 'additional'}`}>
+                    {advance.advanceType === 'initial' ? 'Initial' : 'Additional'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Empty State */}
       {metrics.recentTrips.length === 0 && metrics.recentAdvances.length === 0 && (
