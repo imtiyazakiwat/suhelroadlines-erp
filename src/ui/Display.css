@@ -1,0 +1,294 @@
+/* ------------------------------------------------------------------- Card */
+
+.card26 {
+  background: var(--bg-grouped-secondary);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-2);
+}
+
+.card26--inset {
+  margin: 0 var(--gutter);
+}
+
+.card26--padded {
+  padding: var(--gap-4);
+}
+
+/* ---------------------------------------------------------- SectionHeader */
+
+.shdr26 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-3);
+  margin-bottom: var(--gap-3);
+}
+
+.shdr26__title {
+  margin: 0;
+  font: var(--t-title-3);
+  letter-spacing: var(--track-title-2);
+  color: var(--label-1);
+}
+
+.shdr26__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  padding: 0;
+  font: var(--t-footnote);
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.shdr26__action:active {
+  opacity: var(--press-opacity);
+}
+
+/* ------------------------------------------------------------------ Badge */
+
+.bdg26 {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 21px;
+  padding: 0 8px;
+  font: var(--t-caption-2);
+  font-weight: 600;
+  border-radius: var(--r-capsule);
+  white-space: nowrap;
+}
+
+.bdg26__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.bdg26--neutral { color: var(--label-2); background: var(--fill-3); }
+.bdg26--accent  { color: var(--accent);  background: var(--info-bg); }
+.bdg26--brand   { color: var(--brand);   background: var(--brand-tint); }
+.bdg26--success { color: var(--success); background: var(--success-bg); }
+.bdg26--danger  { color: var(--sys-red); background: var(--danger-bg); }
+.bdg26--warning { color: var(--warning); background: var(--warning-bg); }
+
+.bdg26--solid-success { color: #fff; background: var(--sys-green); }
+.bdg26--solid-danger  { color: #fff; background: var(--sys-red); }
+
+/* ------------------------------------------------------------------- Chip */
+
+.chp26 {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 12px;
+  font: var(--t-footnote);
+  font-weight: 500;
+  color: var(--label-1);
+  background: var(--fill-3);
+  border: none;
+  border-radius: var(--r-capsule);
+  cursor: default;
+  white-space: nowrap;
+  transition: background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-spring);
+}
+
+button.chp26 {
+  cursor: pointer;
+}
+
+button.chp26:active {
+  transform: scale(var(--press-scale));
+}
+
+.chp26.is-selected {
+  color: #fff;
+  background: var(--accent);
+}
+
+.chp26:has(.chp26__remove) {
+  padding-right: 5px;
+}
+
+.chp26__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  color: inherit;
+  background: rgba(120, 120, 128, 0.2);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.chp26__remove:active {
+  background: rgba(120, 120, 128, 0.35);
+}
+
+/* ----------------------------------------------------------------- Switch */
+
+.swt26 {
+  position: relative;
+  width: 51px;
+  height: 31px;
+  flex-shrink: 0;
+  padding: 0;
+  background: var(--fill-1);
+  border: none;
+  border-radius: var(--r-capsule);
+  cursor: pointer;
+  transition: background-color var(--dur-base) var(--ease-spring);
+}
+
+.swt26.is-on {
+  background: var(--sys-green);
+}
+
+.swt26:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.swt26__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16);
+  transition: transform var(--dur-base) var(--ease-spring);
+}
+
+.swt26.is-on .swt26__thumb {
+  transform: translateX(20px);
+}
+
+/* ------------------------------------------------------------- EmptyState */
+
+.empt26 {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gap-2);
+  padding: var(--gap-8) var(--gap-5);
+  text-align: center;
+}
+
+.empt26__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: var(--gap-1);
+  color: var(--label-3);
+  background: var(--fill-4);
+  border-radius: 50%;
+}
+
+.empt26__title {
+  margin: 0;
+  font: var(--t-headline);
+  letter-spacing: var(--track-headline);
+  color: var(--label-1);
+}
+
+.empt26__message {
+  margin: 0;
+  max-width: 30ch;
+  font: var(--t-subhead);
+  color: var(--label-2);
+}
+
+.empt26__action {
+  margin-top: var(--gap-3);
+}
+
+/* --------------------------------------------------------------- Skeleton */
+
+.skel26 {
+  display: block;
+  background: linear-gradient(
+    90deg,
+    var(--fill-4) 25%,
+    var(--fill-3) 50%,
+    var(--fill-4) 75%
+  );
+  background-size: 200% 100%;
+  animation: skel26 1.4s linear infinite;
+}
+
+@keyframes skel26 {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skel26 {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------- Divider */
+
+.div26 {
+  display: block;
+  height: 0.5px;
+  background: var(--separator);
+}
+
+.div26--inset {
+  margin-left: var(--gap-4);
+}
+
+/* ------------------------------------------------------------------- Stat */
+
+.stat26 {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.stat26__value {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: var(--t-headline);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--label-1);
+}
+
+.stat26__label {
+  font: var(--t-caption-1);
+  color: var(--label-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stat26__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.stat26__dot--neutral { background: var(--label-4); }
+.stat26__dot--success { background: var(--sys-green); }
+.stat26__dot--accent  { background: var(--accent); }
+.stat26__dot--danger  { background: var(--sys-red); }
+.stat26__dot--warning { background: var(--sys-orange); }

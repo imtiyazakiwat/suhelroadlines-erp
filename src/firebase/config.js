@@ -1,43 +1,78 @@
-// Firebase configuration with fallback
+// Firebase bootstrap.
+// Config comes from .env.local (REACT_APP_FIREBASE_*) — nothing is hardcoded.
+// Firestore = system of record. Realtime Database = low-latency cache + sync channel.
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
-// import { getAuth } from 'firebase/auth';  // Disabled for now
-// import { getStorage } from 'firebase/storage';  // Disabled for now
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager
+} from 'firebase/firestore';
+import { getDatabase } from 'firebase/database';
 
-// Firebase config
 const firebaseConfig = {
-  apiKey: "AIzaSyACnCJ0C0p8Egu7PfWBq0RHHHimz-ShtsE",
-  authDomain: "suhelroadlineserp.firebaseapp.com",
-  projectId: "suhelroadlineserp",
-  storageBucket: "suhelroadlineserp.firebasestorage.app",
-  messagingSenderId: "880576594120",
-  appId: "1:880576594120:web:4cb9a3b461b160d7cf65fd",
-  measurementId: "G-EXGWGVHWJG"
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  databaseURL: process.env.REACT_APP_FIREBASE_DATABASE_URL,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
 
-// Firebase availability flag
 export let isFirebaseAvailable = false;
+export let isRealtimeAvailable = false;
 
-// Initialize Firebase with error handling
 let app = null;
 let db = null;
-let auth = null;
-let storage = null;
+let rtdb = null;
 
-try {
-  app = initializeApp(firebaseConfig);
-  db = getFirestore(app);
-  // Only initialize Firestore for now, skip Auth and Storage
-  // auth = getAuth(app);
-  // storage = getStorage(app);
-  isFirebaseAvailable = true;
-  console.log('Firebase initialized successfully (Firestore only)');
-} catch (error) {
-  console.error('Firebase initialization failed:', error);
-  console.warn('Falling back to local storage mode');
-  isFirebaseAvailable = false;
+const missing = ['apiKey', 'projectId', 'appId'].filter((key) => !firebaseConfig[key]);
+
+if (missing.length) {
+  console.error(
+    `Firebase config incomplete (missing ${missing.join(', ')}). ` +
+      'Create .env.local from .env.example and restart the dev server. Falling back to local storage.'
+  );
+} else {
+  try {
+    app = initializeApp(firebaseConfig);
+
+    // Persistent multi-tab cache: reads and writes hit the local IndexedDB copy
+    // first, so the UI updates immediately and works offline.
+    db = initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+    });
+    isFirebaseAvailable = true;
+
+    if (firebaseConfig.databaseURL) {
+      try {
+        rtdb = getDatabase(app);
+        isRealtimeAvailable = true;
+      } catch (rtdbError) {
+        console.warn('Realtime Database unavailable, using Firestore only:', rtdbError.message);
+      }
+    }
+  } catch (error) {
+    console.error('Firebase initialization failed:', error);
+    isFirebaseAvailable = false;
+  }
 }
 
-// Export Firebase services (auth and storage will be null)
-export { db, auth, storage };
+// Analytics is optional and must never delay first paint.
+if (app && firebaseConfig.measurementId && process.env.NODE_ENV === 'production') {
+  import('firebase/analytics')
+    .then(({ getAnalytics, isSupported }) =>
+      isSupported().then((ok) => {
+        if (ok) getAnalytics(app);
+      })
+    )
+    .catch(() => {});
+}
+
+// auth/storage stay unused for now; exported as null so old imports keep working.
+export const auth = null;
+export const storage = null;
+
+export { db, rtdb };
 export default app;

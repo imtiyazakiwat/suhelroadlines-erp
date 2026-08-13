@@ -1,0 +1,353 @@
+/* ============================ shared overlay shell ======================== */
+
+.ovl26 {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-sheet);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.ovl26--action {
+  align-items: flex-end;
+  padding: 0 var(--gap-2) calc(var(--safe-b) + var(--gap-2));
+}
+
+.ovl26--alert {
+  align-items: center;
+  padding: var(--gap-5);
+  z-index: var(--z-alert);
+}
+
+.ovl26__scrim {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  background: rgba(13, 27, 52, 0.34);
+  border: none;
+  cursor: default;
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  animation: ovl26-fade var(--dur-base) var(--ease-out) both;
+}
+
+@keyframes ovl26-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ================================== Sheet ================================ */
+
+.sht26 {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  /* Bottom corners square off against the screen edge */
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  --glass-elevation: 0 -8px 40px rgba(13, 27, 52, 0.18);
+  animation: sht26-in var(--dur-sheet) var(--ease-spring) both;
+  will-change: transform;
+}
+
+@keyframes sht26-in {
+  from { transform: translate3d(0, 100%, 0); }
+  to   { transform: translate3d(0, 0, 0); }
+}
+
+/* While a finger is down, follow it exactly — no easing lag. */
+.sht26.is-dragging {
+  animation: none;
+  transition: none;
+}
+
+.sht26:not(.is-dragging) {
+  transition: transform var(--dur-base) var(--ease-spring);
+}
+
+.sht26 > .glass__content {
+  display: flex;
+  flex-direction: column;
+  max-height: inherit;
+  overflow: hidden;
+}
+
+.sht26__panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 92vh;
+  padding-bottom: var(--safe-b);
+  outline: none;
+}
+
+.sht26__grip {
+  flex-shrink: 0;
+  touch-action: none;
+  cursor: grab;
+}
+
+.sht26__grip:active {
+  cursor: grabbing;
+}
+
+.sht26__grabber {
+  display: block;
+  width: 36px;
+  height: 5px;
+  margin: 7px auto 0;
+  background: var(--label-4);
+  border-radius: var(--r-capsule);
+}
+
+.sht26__head {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-2);
+  padding: var(--gap-3) var(--gutter) var(--gap-3);
+}
+
+.sht26__head-side {
+  flex: 1 1 0;
+  display: flex;
+  min-width: 0;
+}
+
+.sht26__head-side--end {
+  justify-content: flex-end;
+}
+
+.sht26__titles {
+  flex: 0 1 auto;
+  min-width: 0;
+  text-align: center;
+}
+
+.sht26__title {
+  margin: 0;
+  font: var(--t-headline);
+  letter-spacing: var(--track-headline);
+  color: var(--label-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sht26__subtitle {
+  margin: 1px 0 0;
+  font: var(--t-caption-1);
+  color: var(--label-2);
+}
+
+.sht26__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 0 var(--gutter) var(--gap-5);
+}
+
+/* =============================== ActionSheet ============================= */
+
+.act26 {
+  position: relative;
+  width: 100%;
+  max-width: 460px;
+  outline: none;
+  animation: sht26-in var(--dur-base) var(--ease-spring) both;
+}
+
+.act26__group {
+  overflow: hidden;
+  --glass-elevation: var(--sh-4);
+}
+
+.act26__group + .act26__group {
+  margin-top: var(--gap-2);
+}
+
+.act26__group > .glass__content {
+  display: flex;
+  flex-direction: column;
+}
+
+.act26__header {
+  padding: var(--gap-4) var(--gap-5);
+  text-align: center;
+  border-bottom: 0.5px solid var(--separator);
+}
+
+.act26__title {
+  margin: 0;
+  font: var(--t-footnote);
+  font-weight: 600;
+  color: var(--label-2);
+}
+
+.act26__message {
+  margin: 3px 0 0;
+  font: var(--t-caption-1);
+  color: var(--label-3);
+}
+
+.act26__item {
+  min-height: 57px;
+  padding: 0 var(--gap-4);
+  font: var(--t-body);
+  font-size: 20px;
+  color: var(--accent);
+  background: none;
+  border: none;
+  border-bottom: 0.5px solid var(--separator);
+  cursor: pointer;
+  transition: background-color var(--dur-instant) var(--ease-out);
+}
+
+.act26__item:last-child {
+  border-bottom: none;
+}
+
+.act26__item:active {
+  background: var(--fill-3);
+}
+
+.act26__item.is-destructive {
+  color: var(--sys-red);
+}
+
+.act26__item.is-disabled {
+  color: var(--label-4);
+  cursor: not-allowed;
+}
+
+.act26__item--cancel {
+  font-weight: 600;
+}
+
+/* ================================== Alert ================================ */
+
+.alr26 {
+  width: 100%;
+  max-width: 300px;
+  --glass-elevation: var(--sh-5);
+  animation: alr26-in var(--dur-base) var(--ease-spring) both;
+}
+
+@keyframes alr26-in {
+  from { opacity: 0; transform: scale(1.14); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.alr26__panel {
+  outline: none;
+}
+
+.alr26__content {
+  padding: var(--gap-5) var(--gap-4) var(--gap-4);
+  text-align: center;
+}
+
+.alr26__title {
+  margin: 0;
+  font: var(--t-headline);
+  letter-spacing: var(--track-headline);
+  color: var(--label-1);
+}
+
+.alr26__message {
+  margin: 4px 0 0;
+  font: var(--t-footnote);
+  color: var(--label-1);
+}
+
+.alr26__actions {
+  display: flex;
+  flex-direction: column;
+  border-top: 0.5px solid var(--separator);
+}
+
+.alr26__actions--pair {
+  flex-direction: row;
+}
+
+.alr26__button {
+  flex: 1;
+  min-height: 44px;
+  padding: 0 var(--gap-3);
+  font: var(--t-body);
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background-color var(--dur-instant) var(--ease-out);
+}
+
+.alr26__actions--pair .alr26__button + .alr26__button {
+  border-left: 0.5px solid var(--separator);
+}
+
+.alr26__button:active {
+  background: var(--fill-3);
+}
+
+.alr26__button--confirm {
+  font-weight: 600;
+}
+
+.alr26__button--confirm.is-destructive {
+  color: var(--sys-red);
+}
+
+/* ================================== Toast ================================ */
+
+.tst26__stack {
+  position: fixed;
+  top: calc(var(--safe-t) + var(--gap-2));
+  left: 0;
+  right: 0;
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gap-2);
+  padding: 0 var(--gutter);
+  pointer-events: none;
+}
+
+.tst26 {
+  display: inline-flex;
+  max-width: 100%;
+  --glass-elevation: var(--sh-4);
+  pointer-events: auto;
+  cursor: pointer;
+  animation: tst26-in var(--dur-base) var(--ease-spring) both;
+}
+
+.tst26 > .glass__content {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-2);
+  min-height: 40px;
+  padding: 0 var(--gap-4);
+}
+
+@keyframes tst26-in {
+  from { opacity: 0; transform: translate3d(0, -14px, 0) scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+
+.tst26__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.tst26--success .tst26__icon { color: var(--sys-green); }
+.tst26--error   .tst26__icon { color: var(--sys-red); }
+
+.tst26__text {
+  font: var(--t-subhead);
+  font-weight: 500;
+  color: var(--label-1);
+}

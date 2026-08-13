@@ -1,291 +1,297 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { tripService } from '../../services/firebaseService';
+import { isStrReceived, formatINR } from '../../services/homeService';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
-import Toast from '../Common/Toast';
+import {
+  Button,
+  Segmented,
+  DateField,
+  SearchField,
+  ListSection,
+  ListRow,
+  Badge,
+  Card,
+  Stat,
+  EmptyState,
+  Skeleton,
+  Sheet,
+  useToast
+} from '../../ui';
+import { DocAlertIcon, DocCheckIcon, CalendarIcon } from '../Common/Icons';
 import './SimpleSTRStatus.css';
 
+const STATUS_TABS = [
+  { value: 'all', label: 'All' },
+  { value: 'due', label: 'Due' },
+  { value: 'paid', label: 'Received' }
+];
+
+const formatDate = (value) => {
+  if (!value) return '';
+  const date = value.toDate ? value.toDate() : new Date(value);
+  return isNaN(date.getTime()) ? '' : format(date, 'dd MMM yyyy');
+};
+
 const SimpleSTRStatus = () => {
+  const toast = useToast();
+
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  const [showToast, setShowToast] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
-  
-  // Ref for cleanup
-  const toastTimeoutRef = useRef(null);
-  
+  const [saving, setSaving] = useState(false);
+  const [dirtyIds, setDirtyIds] = useState(() => new Set());
+  const [filterSheet, setFilterSheet] = useState(false);
+  const [vehicleQuery, setVehicleQuery] = useState('');
+
   const [filters, setFilters] = useState({
     dateFrom: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
-    dateTo: format(endOfMonth(new Date()), 'yyyy-MM-dd'),
-    vehicleNumber: ''
+    dateTo: format(endOfMonth(new Date()), 'yyyy-MM-dd')
   });
 
-  useEffect(() => {
-    loadData();
-  }, [filters.dateFrom, filters.dateTo]);
+  // ?filter=due|paid|all — set by the home quick actions and by search results
+  const [searchParams, setSearchParams] = useSearchParams();
+  const statusFilter = STATUS_TABS.some((tab) => tab.value === searchParams.get('filter'))
+    ? searchParams.get('filter')
+    : 'all';
 
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (toastTimeoutRef.current) {
-        clearTimeout(toastTimeoutRef.current);
-      }
-    };
-  }, []);
+  const setStatusFilter = (value) => {
+    const next = new URLSearchParams(searchParams);
+    if (value === 'all') next.delete('filter');
+    else next.set('filter', value);
+    setSearchParams(next, { replace: true });
+  };
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-
-      // Load trips for the current month by default
       const startDate = new Date(filters.dateFrom);
       const endDate = new Date(filters.dateTo);
-      endDate.setHours(23, 59, 59, 999); // End of day
+      endDate.setHours(23, 59, 59, 999);
 
-      const tripsData = await tripService.getTripsByDateRange(startDate, endDate);
-      setTrips(tripsData);
+      setTrips(await tripService.getTripsByDateRange(startDate, endDate));
     } catch (error) {
       console.error('Error loading data:', error);
-      showToastMessage('Error loading data');
+      toast.error('Could not load trips');
     } finally {
       setLoading(false);
     }
+    // toast identity is stable from the provider
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.dateFrom, filters.dateTo]);
 
-  const handleFilterChange = (field, value) => {
-    setFilters(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
-  const handleSTRStatusChange = (tripId, newStatus) => {
-    setTrips(prevTrips => 
-      prevTrips.map(trip => 
-        trip.id === tripId 
-          ? { ...trip, strStatus: newStatus } 
-          : trip
-      )
+  const counts = useMemo(
+    () => ({
+      all: trips.length,
+      due: trips.filter((trip) => !isStrReceived(trip)).length,
+      paid: trips.filter(isStrReceived).length
+    }),
+    [trips]
+  );
+
+  const visibleTrips = useMemo(() => {
+    const term = vehicleQuery.trim().toLowerCase();
+
+    return trips.filter((trip) => {
+      if (statusFilter === 'due' && isStrReceived(trip)) return false;
+      if (statusFilter === 'paid' && !isStrReceived(trip)) return false;
+      if (term) {
+        const haystack = `${trip.vehicleNumber || ''} ${trip.driverName || ''}`.toLowerCase();
+        if (!haystack.includes(term)) return false;
+      }
+      return true;
+    });
+  }, [trips, statusFilter, vehicleQuery]);
+
+  const dueTotal = useMemo(
+    () =>
+      trips
+        .filter((trip) => !isStrReceived(trip))
+        .reduce((sum, trip) => sum + (Number(trip.advanceAmount) || 0), 0),
+    [trips]
+  );
+
+  const toggleStatus = (trip) => {
+    const next = isStrReceived(trip) ? 'not received' : 'Received';
+    setTrips((current) =>
+      current.map((item) => (item.id === trip.id ? { ...item, strStatus: next, strNumber: next } : item))
     );
-    setHasChanges(true);
+    setDirtyIds((current) => new Set(current).add(trip.id));
   };
 
   const saveChanges = async () => {
-    setUpdating(true);
-    
+    if (!dirtyIds.size) return;
+    setSaving(true);
+    const startedAt = performance.now();
+
     try {
-      // Update each trip with new STR status
-      const updatePromises = trips.map(trip => 
-        tripService.updateSTRStatus(trip.id, trip.strStatus)
+      // Only the rows the user touched, and each resolves as soon as it is
+      // durable in the Realtime DB cache.
+      const edited = trips.filter((trip) => dirtyIds.has(trip.id));
+      await Promise.all(
+        edited.map((trip) => tripService.updateSTRStatus(trip.id, trip.strStatus || 'not received'))
       );
-      
-      await Promise.all(updatePromises);
-      
-      showToastMessage('STR status updated successfully!');
-      setHasChanges(false);
-      
-      // Reload data to ensure we have the latest
-      await loadData();
+
+      const ms = Math.round(performance.now() - startedAt);
+      toast.success(`Saved ${edited.length} update${edited.length === 1 ? '' : 's'} in ${ms} ms`);
+      setDirtyIds(new Set());
     } catch (error) {
       console.error('Error updating STR status:', error);
-      showToastMessage('Error updating STR status');
+      toast.error('Could not save STR status');
     } finally {
-      setUpdating(false);
+      setSaving(false);
     }
   };
 
-  const applyFilters = () => {
-    loadData();
-  };
-
-  const clearFilters = () => {
+  const resetFilters = () => {
     setFilters({
       dateFrom: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
-      dateTo: format(endOfMonth(new Date()), 'yyyy-MM-dd'),
-      vehicleNumber: ''
+      dateTo: format(endOfMonth(new Date()), 'yyyy-MM-dd')
     });
+    setVehicleQuery('');
   };
 
-  const showToastMessage = (message) => {
-    setToastMessage(message);
-    setShowToast(true);
-    
-    // Clear existing toast timeout
-    if (toastTimeoutRef.current) {
-      clearTimeout(toastTimeoutRef.current);
-    }
-    
-    // Set new timeout
-    toastTimeoutRef.current = setTimeout(() => {
-      setShowToast(false);
-    }, 3000);
-  };
-
-  const formatDate = (date) => {
-    if (!date) return '';
-    const dateObj = date.toDate ? date.toDate() : new Date(date);
-    return format(dateObj, 'MMM dd, yyyy');
-  };
+  const rangeLabel = `${formatDate(filters.dateFrom)} – ${formatDate(filters.dateTo)}`;
 
   return (
-    <div className="simple-str-status-container">
-      {/* Filters Card */}
-      <div className="filters-card">
-        <div className="card-content">
-          <h3>Filters</h3>
-          
-          <div className="filter-list">
-            <div className="form-group">
-              <label className="form-label">From Date</label>
-              <input
-                type="date"
-                value={filters.dateFrom}
-                onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
-                className="form-input"
-              />
-            </div>
-            
-            <div className="form-group">
-              <label className="form-label">To Date</label>
-              <input
-                type="date"
-                value={filters.dateTo}
-                onChange={(e) => handleFilterChange('dateTo', e.target.value)}
-                className="form-input"
-              />
-            </div>
-            
-            <div className="form-group">
-              <label className="form-label">Vehicle Number</label>
-              <input
-                type="text"
-                placeholder="Filter by vehicle number"
-                value={filters.vehicleNumber}
-                onChange={(e) => handleFilterChange('vehicleNumber', e.target.value)}
-                className="form-input"
-              />
-            </div>
-          </div>
-          
-          <div className="filter-actions">
-            <button 
-              className="btn btn-secondary"
-              onClick={clearFilters}
-            >
-              Clear
-            </button>
-            <button 
-              className="btn btn-primary"
-              onClick={applyFilters}
-            >
-              Apply
-            </button>
-          </div>
-        </div>
+    <div className="str">
+      <div className="str__toolbar">
+        <SearchField
+          value={vehicleQuery}
+          onChange={(e) => setVehicleQuery(e.target.value)}
+          placeholder="Filter by vehicle or driver"
+        />
+
+        <Segmented
+          options={STATUS_TABS.map((tab) => ({ ...tab, count: counts[tab.value] }))}
+          value={statusFilter}
+          onChange={setStatusFilter}
+          ariaLabel="STR status"
+        />
+
+        <button type="button" className="str__range" onClick={() => setFilterSheet(true)}>
+          <CalendarIcon size={15} />
+          <span>{rangeLabel}</span>
+        </button>
       </div>
 
-      {/* STR Status Management Card */}
-      <div className="str-status-card">
-        <div className="card-content">
-          <div className="str-status-header">
-            <h3>STR Status Management</h3>
-            <div className="str-status-actions">
-              <span className={`badge ${hasChanges ? 'badge-red' : 'badge-gray'}`}>
-                {trips.length} trips
-              </span>
-              <button 
-                className="btn btn-primary save-btn"
-                onClick={saveChanges}
-                disabled={!hasChanges || updating}
-              >
-                {updating ? (
-                  <>
-                    <div className="loading-spinner"></div>
-                    Saving...
-                  </>
-                ) : (
-                  'Save'
-                )}
-              </button>
-            </div>
-          </div>
-          
-          {loading ? (
-            <div className="loading-container">
-              <div className="loading-shimmer" style={{ height: 60, marginBottom: 8 }}></div>
-              <div className="loading-shimmer" style={{ height: 60, marginBottom: 8 }}></div>
-              <div className="loading-shimmer" style={{ height: 60 }}></div>
-            </div>
-          ) : (
-            <div className="table-responsive">
-              {trips.length === 0 ? (
-                <div className="empty-state">
-                  <svg className="icon-xl" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2z"></path>
-                    <line x1="8" y1="1" x2="8" y2="4"></line>
-                    <line x1="16" y1="1" x2="16" y2="4"></line>
-                  </svg>
-                  <h3>No trips found</h3>
-                  <p>Try adjusting your filters to see more results</p>
-                </div>
-              ) : (
-                <table className="str-status-table">
-                  <thead>
-                    <tr>
-                      <th className="col-sl">SL</th>
-                      <th className="col-date">Date</th>
-                      <th className="col-vehicle">Vehicle & Driver</th>
-                      <th className="col-str-status">STR Status</th>
-                      <th className="col-actions">Quick Edit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {trips.map((trip) => (
-                      <tr key={trip.id}>
-                        <td className="col-sl">
-                          <span className="sl-number">#{trip.slNumber}</span>
-                        </td>
-                        <td className="col-date">{formatDate(trip.date)}</td>
-                        <td className="col-vehicle">
-                          <div className="vehicle-info">
-                            <span className="vehicle-number">{trip.vehicleNumber}</span>
-                            {trip.driverName && (
-                              <span className="driver-name">• {trip.driverName}</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="col-str-status">
-                          <select
-                            value={trip.strStatus || 'not received'}
-                            onChange={(e) => handleSTRStatusChange(trip.id, e.target.value)}
-                            className={`str-status-select ${(trip.strStatus || 'not received') === 'Received' ? 'received' : 'not-received'}`}
-                          >
-                            <option value="not received">Not Received</option>
-                            <option value="Received">Received</option>
-                          </select>
-                        </td>
-                        <td className="col-actions">
-                          <div className="status-indicator">
-                            {trip.strStatus === 'Received' ? (
-                              <span className="status-dot received" title="STR Received"></span>
-                            ) : (
-                              <span className="status-dot pending" title="STR Pending"></span>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+      {counts.due > 0 && (
+        <Card className="str__summary">
+          <Stat value={counts.due} label="STR pending" tone="danger" dot />
+          <span className="str__summary-divider" aria-hidden="true" />
+          <Stat value={formatINR(dueTotal)} label="Advance at risk" />
+        </Card>
+      )}
 
-      {/* Toast */}
-      <Toast opened={showToast} text={toastMessage} onToastClosed={() => setShowToast(false)} />
+      {loading ? (
+        <div className="str__skeleton">
+          <Skeleton height={66} radius="var(--r-lg)" />
+          <Skeleton height={66} radius="var(--r-lg)" />
+          <Skeleton height={66} radius="var(--r-lg)" />
+        </div>
+      ) : visibleTrips.length === 0 ? (
+        <Card padded={false} className="str__empty">
+          <EmptyState
+            icon={<DocCheckIcon size={26} />}
+            title="No trips here"
+            message={
+              statusFilter === 'due'
+                ? 'Every STR in this range is received.'
+                : 'Try a wider date range or clear the filter.'
+            }
+            action={
+              <Button variant="tinted" onClick={resetFilters}>
+                Reset filters
+              </Button>
+            }
+          />
+        </Card>
+      ) : (
+        <ListSection
+          header={`${visibleTrips.length} trip${visibleTrips.length === 1 ? '' : 's'}`}
+          footer="Tap a row to flip its STR status. Changes save together."
+        >
+          {visibleTrips.map((trip) => {
+            const received = isStrReceived(trip);
+            const dirty = dirtyIds.has(trip.id);
+
+            return (
+              <ListRow
+                key={trip.id}
+                icon={received ? <DocCheckIcon size={17} /> : <DocAlertIcon size={17} />}
+                iconTone={received ? 'success' : 'danger'}
+                title={trip.vehicleNumber}
+                subtitle={`#${trip.slNumber ?? '—'} · ${trip.driverName || 'No driver'}`}
+                detail={formatDate(trip.date)}
+                badge={
+                  <Badge tone={received ? 'success' : 'danger'} dot>
+                    {received ? 'Received' : 'Due'}
+                  </Badge>
+                }
+                accessory={dirty ? <span className="str__dirty" aria-label="Unsaved" /> : null}
+                onClick={() => toggleStatus(trip)}
+                className={dirty ? 'is-dirty' : ''}
+              />
+            );
+          })}
+        </ListSection>
+      )}
+
+      {/* Save bar floats above the tab dock only while there is something to save */}
+      {dirtyIds.size > 0 && (
+        <div className="str__savebar">
+          <Button
+            variant="filled"
+            size="lg"
+            block
+            capsule
+            loading={saving}
+            onClick={saveChanges}
+          >
+            {saving
+              ? 'Saving…'
+              : `Save ${dirtyIds.size} change${dirtyIds.size === 1 ? '' : 's'}`}
+          </Button>
+        </div>
+      )}
+
+      <Sheet
+        open={filterSheet}
+        onClose={() => setFilterSheet(false)}
+        title="Date range"
+        primaryAction={
+          <Button variant="plain" onClick={() => setFilterSheet(false)}>
+            Done
+          </Button>
+        }
+        secondaryAction={
+          <Button variant="plain" onClick={resetFilters}>
+            Reset
+          </Button>
+        }
+      >
+        <ListSection inset={false}>
+          <ListRow>
+            <DateField
+              label="From"
+              layout="row"
+              value={filters.dateFrom}
+              onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))}
+            />
+          </ListRow>
+          <ListRow>
+            <DateField
+              label="To"
+              layout="row"
+              value={filters.dateTo}
+              onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))}
+            />
+          </ListRow>
+        </ListSection>
+      </Sheet>
     </div>
   );
 };

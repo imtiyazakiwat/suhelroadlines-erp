@@ -1,0 +1,142 @@
+.pkr26 {
+  min-width: 0;
+}
+
+.pkr26--stacked + .pkr26--stacked,
+.pkr26--stacked + .fld--stacked,
+.fld--stacked + .pkr26--stacked {
+  margin-top: var(--gap-4);
+}
+
+.pkr26__label {
+  display: block;
+  margin-bottom: 6px;
+  font: var(--t-footnote);
+  font-weight: 600;
+  color: var(--label-2);
+}
+
+.pkr26__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-2);
+  width: 100%;
+  min-height: var(--control-h);
+  padding: 0 var(--gap-3);
+  font: var(--t-callout);
+  font-size: var(--field-font);
+  text-align: left;
+  color: var(--label-1);
+  background: var(--fill-4);
+  border: 0.5px solid var(--separator);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-spring);
+}
+
+.pkr26__trigger:active:not(:disabled) {
+  transform: scale(0.99);
+  background: var(--fill-3);
+}
+
+.pkr26__trigger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pkr26.is-invalid .pkr26__trigger {
+  border-color: var(--sys-red);
+  background: var(--danger-bg);
+}
+
+.pkr26__value {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pkr26__value.is-placeholder {
+  color: var(--label-4);
+}
+
+.pkr26__chevrons {
+  flex-shrink: 0;
+  color: var(--label-3);
+}
+
+.pkr26__error {
+  display: block;
+  margin-top: 5px;
+  font: var(--t-caption-1);
+  font-weight: 500;
+  color: var(--sys-red);
+}
+
+/* Row layout, for use inside a ListSection */
+.pkr26--row {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-3);
+  flex: 1;
+  min-width: 0;
+  min-height: var(--row-h);
+}
+
+.pkr26--row .pkr26__label {
+  flex: 0 0 auto;
+  min-width: 96px;
+  margin: 0;
+  font: var(--t-body);
+  font-weight: 400;
+  color: var(--label-1);
+}
+
+.pkr26--row .pkr26__trigger {
+  flex: 1;
+  justify-content: flex-end;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--label-2);
+}
+
+.pkr26--row .pkr26__value {
+  flex: 0 1 auto;
+  text-align: right;
+}
+
+.pkr26--row .pkr26__error {
+  display: none;
+}
+
+/* ------------------------------------------------------------ sheet inner */
+
+.pkr26__search {
+  padding: 0 0 var(--gap-3);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.pkr26__options {
+  overflow: hidden;
+  background: var(--bg-grouped-secondary);
+  border-radius: var(--r-lg);
+}
+
+.pkr26__options .lst26__row.is-checked .lst26__title {
+  font-weight: 600;
+}
+
+.pkr26__options .lst26__row.is-checked .lst26__trailing {
+  color: var(--accent);
+}
+
+.pkr26__create .lst26__title {
+  color: var(--accent);
+  font-weight: 600;
+}

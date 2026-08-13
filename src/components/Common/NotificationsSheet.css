@@ -1,0 +1,14 @@
+/* Notifications sheet. Layout only — the Sheet primitive owns the chrome. */
+
+.notif-sheet__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+}
+
+.notif-sheet__footer {
+  position: sticky;
+  bottom: 0;
+  padding: var(--gap-3) 0 var(--gap-1);
+  background: linear-gradient(180deg, transparent 0%, var(--glass-regular-tint) 40%);
+}

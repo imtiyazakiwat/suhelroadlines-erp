@@ -27,7 +27,6 @@ const AddEntryForm = () => {
   const [filteredVillages, setFilteredVillages] = useState([]);
   const [showVehicleDropdown, setShowVehicleDropdown] = useState(false);
   const [showVillageDropdown, setShowVillageDropdown] = useState(false);
-  const [vehicleSearchQuery, setVehicleSearchQuery] = useState('');
   const [villageSearchQuery, setVillageSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -38,10 +37,34 @@ const AddEntryForm = () => {
   const toastTimeoutRef = useRef(null);
   const navigationTimeoutRef = useRef(null);
 
+  // Refs for outside-tap dismissal of the two autocomplete panels
+  const vehicleFieldRef = useRef(null);
+  const villageFieldRef = useRef(null);
+
   useEffect(() => {
     initializeForm();
     loadVehicles();
     loadVillages();
+  }, []);
+
+  // Close a dropdown when the user taps anywhere outside its field.
+  // Without this the panels stayed open and covered the fields below.
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      if (vehicleFieldRef.current && !vehicleFieldRef.current.contains(event.target)) {
+        setShowVehicleDropdown(false);
+      }
+      if (villageFieldRef.current && !villageFieldRef.current.contains(event.target)) {
+        setShowVillageDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+    };
   }, []);
 
   // Cleanup timeouts on unmount
@@ -109,7 +132,6 @@ const AddEntryForm = () => {
   };
 
   const handleVehicleSearch = (query) => {
-    setVehicleSearchQuery(query);
     setFormData(prev => ({ ...prev, vehicleNumber: query }));
     
     if (query.trim()) {
@@ -132,7 +154,6 @@ const AddEntryForm = () => {
       driverName: vehicle.driverName || '',
       mobileNumber: vehicle.mobileNumber || ''
     }));
-    setVehicleSearchQuery(vehicle.vehicleNumber);
     setShowVehicleDropdown(false);
   };
 
@@ -315,8 +336,8 @@ const AddEntryForm = () => {
   return (
     <div className="add-entry-form">
       <div className="form-header">
-        <h1 className="form-title">Add New Entry</h1>
-        <p className="form-subtitle">Create a new trip entry with vehicle and driver details</p>
+        <h1 className="form-title">New Trip</h1>
+        <p className="form-subtitle">Vehicle, driver and advance details</p>
       </div>
 
       <form onSubmit={handleSubmit} className="entry-form">
@@ -365,13 +386,18 @@ const AddEntryForm = () => {
         {/* Vehicle Number with Search */}
         <div className="form-group">
           <label className="form-label">Vehicle Number</label>
-          <div className="search-container">
+          <div className="search-container" ref={vehicleFieldRef}>
             <input
               type="text"
-              value={vehicleSearchQuery || formData.vehicleNumber}
+              value={formData.vehicleNumber}
               onChange={(e) => handleVehicleSearch(e.target.value)}
               onFocus={() => setShowVehicleDropdown(true)}
               placeholder="Search or enter vehicle number"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="characters"
+              spellCheck="false"
+              enterKeyHint="next"
               className={`form-input search-input ${errors.vehicleNumber ? 'error' : ''}`}
             />
             <svg className="search-icon icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -385,6 +411,9 @@ const AddEntryForm = () => {
                   <div
                     key={vehicle.vehicleNumber}
                     className="dropdown-item"
+                    role="button"
+                    tabIndex={0}
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => handleVehicleSelect(vehicle)}
                   >
                     <div className="dropdown-primary">{vehicle.vehicleNumber}</div>
@@ -403,7 +432,7 @@ const AddEntryForm = () => {
           <select
             value={formData.strNumber}
             onChange={(e) => handleInputChange('strNumber', e.target.value)}
-            className={`form-input ${errors.strNumber ? 'error' : ''}`}
+            className={`form-input form-select ${errors.strNumber ? 'error' : ''}`}
           >
             <option value="not received">Not Received</option>
             <option value="Received">Received</option>
@@ -417,7 +446,7 @@ const AddEntryForm = () => {
           <select
             value={formData.vehicleType}
             onChange={(e) => handleInputChange('vehicleType', e.target.value)}
-            className={`form-input ${errors.vehicleType ? 'error' : ''}`}
+            className={`form-input form-select ${errors.vehicleType ? 'error' : ''}`}
           >
             <option value="lorry">Lorry</option>
             <option value="tempo">Tempo</option>
@@ -450,13 +479,31 @@ const AddEntryForm = () => {
               </div>
             )}
             
-            <div className="search-container">
+            <div className="search-container" ref={villageFieldRef}>
               <input
                 type="text"
                 value={villageSearchQuery}
                 onChange={(e) => handleVillageSearch(e.target.value)}
                 onFocus={() => setShowVillageDropdown(true)}
                 placeholder="Search and add villages"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck="false"
+                enterKeyHint="done"
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  const exact = filteredVillages.find(
+                    (v) => v.villageName.toLowerCase() === villageSearchQuery.trim().toLowerCase()
+                  );
+                  if (exact) {
+                    handleVillageSelect(exact);
+                  } else if (filteredVillages.length === 1) {
+                    handleVillageSelect(filteredVillages[0]);
+                  } else {
+                    addNewVillage();
+                  }
+                }}
                 className="form-input search-input"
               />
               <button
@@ -477,6 +524,9 @@ const AddEntryForm = () => {
                     <div
                       key={village.id}
                       className={`dropdown-item ${formData.villages.includes(village.villageName) ? 'disabled' : ''}`}
+                      role="button"
+                      tabIndex={0}
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => !formData.villages.includes(village.villageName) && handleVillageSelect(village)}
                     >
                       <div className="dropdown-primary">{village.villageName}</div>
@@ -485,7 +535,13 @@ const AddEntryForm = () => {
                   ))}
                   
                   {villageSearchQuery && !filteredVillages.some(v => v.villageName.toLowerCase() === villageSearchQuery.toLowerCase()) && (
-                    <div className="dropdown-item new-item" onClick={addNewVillage}>
+                    <div
+                      className="dropdown-item new-item"
+                      role="button"
+                      tabIndex={0}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={addNewVillage}
+                    >
                       <div className="dropdown-primary">Add "{villageSearchQuery}"</div>
                       <div className="dropdown-secondary">New village</div>
                     </div>
@@ -506,6 +562,7 @@ const AddEntryForm = () => {
             value={formData.quantity}
             onChange={(e) => handleInputChange('quantity', e.target.value)}
             placeholder="Enter quantity or notes (optional)"
+            inputMode="decimal"
             className={`form-input ${errors.quantity ? 'error' : ''}`}
           />
           {errors.quantity && <span className="error-text">{errors.quantity}</span>}
@@ -519,6 +576,8 @@ const AddEntryForm = () => {
             value={formData.driverName}
             onChange={(e) => handleInputChange('driverName', e.target.value)}
             placeholder="Enter driver name"
+            autoComplete="off"
+            autoCapitalize="words"
             className={`form-input ${errors.driverName ? 'error' : ''}`}
           />
           {errors.driverName && <span className="error-text">{errors.driverName}</span>}
@@ -530,8 +589,11 @@ const AddEntryForm = () => {
           <input
             type="tel"
             value={formData.mobileNumber}
-            onChange={(e) => handleInputChange('mobileNumber', e.target.value)}
+            onChange={(e) => handleInputChange('mobileNumber', e.target.value.replace(/\D/g, '').slice(0, 10))}
             placeholder="Enter 10-digit mobile number"
+            inputMode="numeric"
+            maxLength={10}
+            autoComplete="tel"
             className={`form-input ${errors.mobileNumber ? 'error' : ''}`}
           />
           {errors.mobileNumber && <span className="error-text">{errors.mobileNumber}</span>}
@@ -546,6 +608,7 @@ const AddEntryForm = () => {
             value={formData.advanceAmount}
             onChange={(e) => handleInputChange('advanceAmount', e.target.value)}
             placeholder="Enter advance amount (optional)"
+            inputMode="decimal"
             className={`form-input ${errors.advanceAmount ? 'error' : ''}`}
           />
           {errors.advanceAmount && <span className="error-text">{errors.advanceAmount}</span>}

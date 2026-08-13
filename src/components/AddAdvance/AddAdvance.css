@@ -52,9 +52,9 @@
 .form-item input:focus,
 .form-item textarea:focus {
   outline: none;
-  border-color: #8B5A9C;
+  border-color: #0C2A5B;
   background: white;
-  box-shadow: 0 0 0 3px rgba(139, 90, 156, 0.1);
+  box-shadow: 0 0 0 3px rgba(24, 119, 242, 0.1);
 }
 
 .form-item textarea {
@@ -80,7 +80,7 @@
 
 .select-button:hover {
   background: white;
-  border-color: #8B5A9C;
+  border-color: #0C2A5B;
 }
 
 .select-button svg {
@@ -117,16 +117,16 @@
 
 /* Selected Trip Section */
 .selected-trip-section {
-  background: rgba(139, 90, 156, 0.05);
+  background: rgba(24, 119, 242, 0.05);
   border-radius: 16px;
   padding: 20px;
   margin: 20px 0;
-  border: 1px solid rgba(139, 90, 156, 0.2);
+  border: 1px solid rgba(24, 119, 242, 0.2);
 }
 
 .selected-trip-section h4 {
   margin: 0 0 16px 0;
-  color: #8B5A9C;
+  color: #0C2A5B;
   font-size: 18px;
   font-weight: 600;
 }
@@ -161,7 +161,7 @@
 }
 
 .trip-info-row .advance-amount {
-  color: #8B5A9C;
+  color: #0C2A5B;
   font-weight: 700;
   font-size: 16px;
 }
@@ -198,7 +198,7 @@
 }
 
 .advance-item .advance-amount {
-  color: #8B5A9C;
+  color: #0C2A5B;
   font-weight: 600;
 }
 
@@ -222,13 +222,13 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #8B5A9C 0%, #A569BD 100%);
+  background: linear-gradient(135deg, #0C2A5B 0%, #123A75 100%);
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(139, 90, 156, 0.3);
+  box-shadow: 0 6px 20px rgba(24, 119, 242, 0.3);
 }
 
 .btn-primary:disabled {
@@ -239,12 +239,12 @@
 
 .btn-secondary {
   background: white;
-  color: #8B5A9C;
-  border: 2px solid #8B5A9C;
+  color: #0C2A5B;
+  border: 2px solid #0C2A5B;
 }
 
 .btn-secondary:hover {
-  background: rgba(139, 90, 156, 0.1);
+  background: rgba(24, 119, 242, 0.1);
 }
 
 /* Modal Styling */
@@ -329,7 +329,7 @@
 
 .search-input:focus {
   outline: none;
-  border-color: #8B5A9C;
+  border-color: #0C2A5B;
   background: white;
 }
 
@@ -363,7 +363,7 @@
 .list-item svg {
   width: 24px;
   height: 24px;
-  color: #8B5A9C;
+  color: #0C2A5B;
   stroke-width: 2;
 }
 
@@ -428,7 +428,7 @@
 }
 
 .trip-col.trip-str {
-  color: #8B5A9C;
+  color: #0C2A5B;
   font-weight: 600;
   justify-content: flex-end;
 }

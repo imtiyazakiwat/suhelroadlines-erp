@@ -1,122 +1,119 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { NavBar, NavButton, NavSearchButton, BackButton, TabBar, DockButton } from '../../ui/chrome';
+import SearchOverlay from '../Common/SearchOverlay';
+import NotificationsSheet from '../Common/NotificationsSheet';
+import { tripService } from '../../services/firebaseService';
+import { isStrReceived } from '../../services/homeService';
+import {
+  HomeIcon,
+  ClipboardCheckIcon,
+  ChartIcon,
+  GearIcon,
+  TruckIcon,
+  BellIcon
+} from '../Common/Icons';
 import './AppLayout.css';
+
+const TITLES = {
+  '/': 'Suhel Roadlines',
+  '/add-entry': 'Add Trip',
+  '/add-advance': 'Add Advance',
+  '/reports': 'Reports',
+  '/str-status': 'Paid STR',
+  '/settings': 'Settings'
+};
+
+const TABS = [
+  { value: '/', label: 'Home', icon: ({ selected }) => <HomeIcon size={23} filled={selected} /> },
+  { value: '/str-status', label: 'STR', icon: <ClipboardCheckIcon size={23} /> },
+  { value: '/reports', label: 'Reports', icon: <ChartIcon size={23} /> },
+  { value: '/settings', label: 'Settings', icon: <GearIcon size={23} /> }
+];
 
 const AppLayout = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const getPageTitle = () => {
-    switch (location.pathname) {
-      case '/':
-        return 'Dashboard';
-      case '/add-entry':
-        return 'Add Entry';
-      case '/add-advance':
-        return 'Add Advance';
-      case '/reports':
-        return 'Reports';
-      case '/str-status':
-        return 'STR Status';
-      case '/settings':
-        return 'Settings';
-      default:
-        return 'SuhelRoadline';
-    }
-  };
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [dueCount, setDueCount] = useState(0);
 
-  const isActive = (path) => location.pathname === path;
+  const path = location.pathname;
+  const isHome = path === '/';
+  const isTabRoot = TABS.some((tab) => tab.value === path);
+  const isAddTrip = path === '/add-entry';
 
-  const handleNavigation = (path) => {
-    console.log('Navigating to:', path);
-    navigate(path);
-  };
+  useEffect(() => {
+    let cancelled = false;
+    tripService
+      .getAllTrips()
+      .then((trips) => {
+        if (!cancelled) setDueCount((trips || []).filter((trip) => !isStrReceived(trip)).length);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [path]);
+
+  const tabs = TABS.map((tab) =>
+    tab.value === '/str-status' ? { ...tab, badge: dueCount } : tab
+  );
 
   return (
-    <div className="app-layout">
-      {/* Header */}
-      <header className="app-header">
-        <h1 className="app-title">{getPageTitle()}</h1>
-      </header>
+    <div className="app-shell">
+      <NavBar
+        title={TITLES[path] || 'Suhel Roadlines'}
+        largeTitle={isHome}
+        transparent
+        leading={
+          isTabRoot ? (
+            isHome ? (
+              <span className="brand-avatar" aria-hidden="true">
+                SR
+              </span>
+            ) : null
+          ) : (
+            <BackButton onClick={() => navigate(-1)} />
+          )
+        }
+        trailing={
+          <>
+            <NavSearchButton placeholder="Search trips" onClick={() => setSearchOpen(true)} />
+            <NavButton
+              label={dueCount > 0 ? `Notifications, ${dueCount} pending` : 'Notifications'}
+              badge={dueCount > 0}
+              onClick={() => setNotificationsOpen(true)}
+            >
+              <BellIcon size={21} />
+            </NavButton>
+          </>
+        }
+      />
 
-      {/* Main Content */}
-      <main className="app-main">
+      <main className="app-content" key={path}>
         {children}
       </main>
 
-      {/* Bottom Navigation */}
-      <nav className="app-nav">
-        <button
-          onClick={() => handleNavigation('/')}
-          className={`nav-item ${isActive('/') ? 'nav-item-active' : ''}`}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-            <polyline points="9,22 9,12 15,12 15,22"></polyline>
-          </svg>
-          <span>Home</span>
-        </button>
+      <TabBar
+        tabs={tabs}
+        value={isTabRoot ? path : null}
+        onChange={(next) => navigate(next)}
+        trailing={
+          <DockButton
+            label="Add trip"
+            tone="solid"
+            active={isAddTrip}
+            onClick={() => navigate('/add-entry')}
+          >
+            <TruckIcon size={25} />
+          </DockButton>
+        }
+      />
 
-        <button
-          onClick={() => handleNavigation('/add-entry')}
-          className={`nav-item ${isActive('/add-entry') ? 'nav-item-active' : ''}`}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="12" y1="8" x2="12" y2="16"></line>
-            <line x1="8" y1="12" x2="16" y2="12"></line>
-          </svg>
-          <span>Add Entry</span>
-        </button>
-
-        <button
-          onClick={() => handleNavigation('/add-advance')}
-          className={`nav-item ${isActive('/add-advance') ? 'nav-item-active' : ''}`}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <line x1="12" y1="1" x2="12" y2="23"></line>
-            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-          </svg>
-          <span>Advance</span>
-        </button>
-
-        <button
-          onClick={() => handleNavigation('/reports')}
-          className={`nav-item ${isActive('/reports') ? 'nav-item-active' : ''}`}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <line x1="18" y1="20" x2="18" y2="10"></line>
-            <line x1="12" y1="20" x2="12" y2="4"></line>
-            <line x1="6" y1="20" x2="6" y2="14"></line>
-          </svg>
-          <span>Reports</span>
-        </button>
-
-        <button
-          onClick={() => handleNavigation('/str-status')}
-          className={`nav-item ${isActive('/str-status') ? 'nav-item-active' : ''}`}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14,2 14,8 20,8"></polyline>
-            <line x1="16" y1="13" x2="8" y2="13"></line>
-            <line x1="16" y1="17" x2="8" y2="17"></line>
-            <polyline points="10,9 9,9 8,9"></polyline>
-          </svg>
-          <span>STR Status</span>
-        </button>
-
-        <button
-          onClick={() => handleNavigation('/settings')}
-          className={`nav-item ${isActive('/settings') ? 'nav-item-active' : ''}`}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-          </svg>
-          <span>Settings</span>
-        </button>
-      </nav>
+      <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <NotificationsSheet open={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
     </div>
   );
 };

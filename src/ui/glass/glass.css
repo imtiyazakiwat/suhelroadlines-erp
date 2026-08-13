@@ -1,0 +1,149 @@
+/* =============================================================================
+   Liquid Glass surface styling.
+   Every layer is a positioned pseudo-element span so the content layer never
+   inherits a filter — filtered text loses subpixel antialiasing and looks soft,
+   which is the tell that gives away most web glass clones.
+   ========================================================================== */
+
+.glass {
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--glass-radius, var(--r-xl));
+  /* The rim: a hairline of light, plus the material's own drop shadow. */
+  box-shadow:
+    inset 0 0 0 0.5px var(--glass-border),
+    inset 0 1px 1px -0.5px var(--glass-inner),
+    0 1px 2px var(--glass-shade),
+    var(--glass-elevation, 0 8px 28px rgba(13, 27, 52, 0.1));
+}
+
+/* --------------------------------------------------------------- variants */
+
+.glass--regular {
+  --glass-fill: var(--glass-regular-tint);
+  --glass-blur: var(--glass-regular-blur);
+  --glass-saturate: var(--glass-regular-saturate);
+  --glass-brightness: var(--glass-regular-brightness);
+  --glass-border: var(--glass-regular-border);
+  --glass-inner: var(--glass-regular-inner);
+  --glass-shade: var(--glass-regular-shade);
+}
+
+.glass--clear {
+  --glass-fill: var(--glass-clear-tint);
+  --glass-blur: var(--glass-clear-blur);
+  --glass-saturate: var(--glass-clear-saturate);
+  --glass-brightness: var(--glass-clear-brightness);
+  --glass-border: var(--glass-clear-border);
+  --glass-inner: var(--glass-clear-inner);
+  --glass-shade: var(--glass-clear-shade);
+}
+
+/* ----------------------------------------------------------------- layers */
+
+.glass__defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.glass__refract,
+.glass__frost,
+.glass__tint,
+.glass__specular,
+.glass__dim {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.glass__refract {
+  z-index: 0;
+}
+
+.glass__frost {
+  z-index: 1;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate))
+    brightness(var(--glass-brightness));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate))
+    brightness(var(--glass-brightness));
+}
+
+.glass__tint {
+  z-index: 2;
+  background: var(--glass-fill);
+}
+
+/* Dimming layer required beneath the clear variant so content stays legible */
+.glass__dim {
+  z-index: 1;
+  background: var(--glass-clear-dim);
+}
+
+.glass__specular {
+  z-index: 3;
+  background: var(--glass-specular);
+  mix-blend-mode: soft-light;
+  opacity: 0.9;
+}
+
+.glass__content {
+  position: relative;
+  z-index: 4;
+  display: block;
+  border-radius: inherit;
+}
+
+/* -------------------------------------------------------------------- tiers */
+
+/* When displacement is live the frost is lighter — the refraction already
+   carries most of the depth, and double-processing muddies it. */
+.glass--displacement .glass__frost {
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.5))
+    saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+  backdrop-filter: blur(calc(var(--glass-blur) * 0.5)) saturate(var(--glass-saturate))
+    brightness(var(--glass-brightness));
+}
+
+/* No backdrop-filter, or Reduce Transparency: solid surface, no blur, no sheen. */
+.glass--opaque {
+  --glass-fill: var(--bg-elevated);
+}
+
+.glass--opaque .glass__frost,
+.glass--opaque .glass__specular,
+.glass--opaque .glass__dim {
+  display: none;
+}
+
+.glass--opaque {
+  box-shadow:
+    inset 0 0 0 0.5px var(--separator),
+    var(--glass-elevation, var(--sh-3));
+}
+
+/* ------------------------------------------------------------- interactive */
+
+.glass--interactive {
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-fast) var(--ease-spring),
+    opacity var(--dur-fast) var(--ease-out);
+}
+
+.glass--interactive:active {
+  transform: scale(var(--press-scale));
+  opacity: var(--press-opacity);
+}
+
+/* Displacement filters repaint per frame; don't animate transform on them
+   during scroll-heavy moments on low-end hardware. */
+@media (prefers-reduced-motion: reduce) {
+  .glass--interactive {
+    transition: none;
+  }
+}

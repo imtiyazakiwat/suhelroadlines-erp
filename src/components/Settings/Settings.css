@@ -44,8 +44,8 @@
 }
 
 .segmented button {
-  background: rgba(139, 90, 156, 0.1);
-  border: 1px solid rgba(139, 90, 156, 0.3);
+  background: rgba(24, 119, 242, 0.1);
+  border: 1px solid rgba(24, 119, 242, 0.3);
   color: var(--f7-theme-color);
   font-weight: 600;
   font-size: 14px;
@@ -93,8 +93,8 @@
 }
 
 .tab-actions .btn-secondary {
-  background: rgba(139, 90, 156, 0.1);
-  border: 1px solid rgba(139, 90, 156, 0.3);
+  background: rgba(24, 119, 242, 0.1);
+  border: 1px solid rgba(24, 119, 242, 0.3);
   border-radius: 8px;
   padding: 8px 16px;
   font-weight: 600;
@@ -143,7 +143,7 @@
 
 .vehicle-item:hover,
 .village-item:hover {
-  background: rgba(139, 90, 156, 0.05);
+  background: rgba(24, 119, 242, 0.05);
 }
 
 .vehicle-item .item-media .icon,
@@ -181,7 +181,7 @@
 }
 
 .settings-list .list-item:hover {
-  background: rgba(139, 90, 156, 0.05);
+  background: rgba(24, 119, 242, 0.05);
 }
 
 .settings-list .list-item:last-child {
@@ -255,7 +255,7 @@
 
 .form-list input:focus {
   border-color: var(--f7-theme-color);
-  box-shadow: 0 0 0 3px rgba(139, 90, 156, 0.1);
+  box-shadow: 0 0 0 3px rgba(24, 119, 242, 0.1);
   outline: none;
 }
 
@@ -299,7 +299,7 @@
 }
 
 .form-actions .btn-secondary:hover {
-  background: rgba(139, 90, 156, 0.1);
+  background: rgba(24, 119, 242, 0.1);
 }
 
 /* Loading States */
@@ -454,7 +454,7 @@
 }
 
 .settings-list .list-item:focus {
-  background: rgba(139, 90, 156, 0.1);
+  background: rgba(24, 119, 242, 0.1);
   outline: 2px solid var(--f7-theme-color);
   outline-offset: -2px;
 }
@@ -484,26 +484,26 @@
 
 /* Highlight active items */
 .items-list .list-item.active {
-  background: rgba(139, 90, 156, 0.1);
+  background: rgba(24, 119, 242, 0.1);
   border-left: 4px solid var(--f7-theme-color);
 }
 
 /* Custom icons for different sections */
 .vehicle-item .item-media .icon {
-  background: rgba(139, 90, 156, 0.1);
+  background: rgba(24, 119, 242, 0.1);
   border-radius: 8px;
   padding: 8px;
 }
 
 .village-item .item-media .icon {
-  background: rgba(74, 155, 155, 0.1);
+  background: rgba(0, 168, 232, 0.1);
   border-radius: 8px;
   padding: 8px;
-  color: #4A9B9B;
+  color: #00A8E8;
 }
 
 .settings-list .item-media .icon {
-  background: rgba(139, 90, 156, 0.1);
+  background: rgba(24, 119, 242, 0.1);
   border-radius: 8px;
   padding: 8px;
 }

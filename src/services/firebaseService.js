@@ -1,7 +1,6 @@
 import { 
   collection, 
   doc, 
-  addDoc, 
   setDoc,
   updateDoc, 
   deleteDoc, 
@@ -16,6 +15,7 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { db, isFirebaseAvailable } from '../firebase/config';
+import fastSync from './fastSync';
 import {
   localTripService,
   localVehicleService,
@@ -51,6 +51,61 @@ const COLLECTIONS = {
   APP_SETTINGS: 'appSettings'
 };
 
+export { COLLECTIONS };
+
+/* ------------------------------------------------------------------------- */
+/* fastSync helpers: Realtime DB cache in front of Firestore.                */
+/* Reads come back from cache immediately and revalidate in the background;  */
+/* writes land in the cache first and are promoted to Firestore after.       */
+/* ------------------------------------------------------------------------- */
+
+/** Firestore Timestamp | ISO string | Date -> Date | null */
+const asDate = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+  if (typeof value.toDate === 'function') {
+    try {
+      return value.toDate();
+    } catch (e) {
+      return null;
+    }
+  }
+  const parsed = new Date(value);
+  return isNaN(parsed.getTime()) ? null : parsed;
+};
+
+/** Reserve a Firestore document id client-side so we can cache before writing. */
+const newId = (collectionName) => doc(collection(db, collectionName)).id;
+
+const byDateDesc = (a, b) => (asDate(b.date)?.getTime() || 0) - (asDate(a.date)?.getTime() || 0);
+
+// Retry handlers for records stranded in the RTDB outbox (write happened,
+// Firestore promotion did not). Runs once per app start.
+const outboxPromoters = {
+  [COLLECTIONS.TRIPS]: (id, entry) =>
+    entry.op === 'delete'
+      ? deleteDoc(doc(db, COLLECTIONS.TRIPS, id))
+      : setDoc(doc(db, COLLECTIONS.TRIPS, id), entry.data, { merge: true }),
+  [COLLECTIONS.VEHICLES]: (id, entry) =>
+    setDoc(doc(db, COLLECTIONS.VEHICLES, id), entry.data, { merge: true }),
+  [COLLECTIONS.ADVANCES]: (id, entry) =>
+    setDoc(doc(db, COLLECTIONS.ADVANCES, id), entry.data, { merge: true }),
+  [COLLECTIONS.VILLAGES]: (id, entry) =>
+    setDoc(doc(db, COLLECTIONS.VILLAGES, id), entry.data, { merge: true })
+};
+
+if (isFirebaseAvailable && db) {
+  // Deferred so it never competes with first paint.
+  setTimeout(() => {
+    fastSync
+      .flushOutbox(outboxPromoters)
+      .then(({ flushed, failed }) => {
+        if (flushed || failed) console.log(`fastSync outbox: ${flushed} promoted, ${failed} pending`);
+      })
+      .catch(() => {});
+  }, 1500);
+}
+
 // Trip Services
 export const tripService = {
   // Add new trip
@@ -71,22 +126,34 @@ export const tripService = {
         throw new Error(`Invalid strStatus: ${strStatus}. Must be one of: ${STR_STATUS_VALUES.join(', ')}`);
       }
       
-      const docRef = await addDoc(collection(db, COLLECTIONS.TRIPS), {
+      // Reserve the id up front so the record can be cached before Firestore
+      // acknowledges. Resolves in RTDB time (well under 300 ms).
+      const tripId = newId(COLLECTIONS.TRIPS);
+      const record = {
         ...tripData,
         vehicleType,
         strStatus,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-      
-      const tripWithId = { ...tripData, vehicleType, strStatus, id: docRef.id };
-      
+        createdAt: tripData.createdAt || new Date(),
+        updatedAt: new Date()
+      };
+
+      await fastSync.writeRecord(COLLECTIONS.TRIPS, tripId, record, () =>
+        setDoc(doc(db, COLLECTIONS.TRIPS, tripId), {
+          ...record,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        })
+      );
+
+      const tripWithId = { ...record, id: tripId };
+
       // If trip has initial advance amount, create an initial advance record
       if (tripData.advanceAmount && tripData.advanceAmount > 0) {
         try {
+          const advanceId = newId(COLLECTIONS.ADVANCES);
           const initialAdvanceData = {
             vehicleNumber: tripData.vehicleNumber,
-            tripId: docRef.id,
+            tripId,
             tripDate: tripData.date,
             advanceAmount: tripData.advanceAmount,
             advanceType: 'initial',
@@ -94,19 +161,19 @@ export const tripService = {
             isSettled: false,
             createdAt: new Date()
           };
-          
-          await addDoc(collection(db, COLLECTIONS.ADVANCES), {
-            ...initialAdvanceData,
-            createdAt: serverTimestamp()
-          });
-          
-          console.log('Created initial advance record for trip:', docRef.id);
+
+          await fastSync.writeRecord(COLLECTIONS.ADVANCES, advanceId, initialAdvanceData, () =>
+            setDoc(doc(db, COLLECTIONS.ADVANCES, advanceId), {
+              ...initialAdvanceData,
+              createdAt: serverTimestamp()
+            })
+          );
         } catch (advanceError) {
           console.error('Error creating initial advance record:', advanceError);
           // Don't fail the trip creation if advance record fails
         }
       }
-      
+
       return tripWithId;
     } catch (error) {
       console.error('Error adding trip:', error);
@@ -114,41 +181,32 @@ export const tripService = {
     }
   },
 
-  // Get all trips
+  // Get all trips (cache-first, revalidated in the background)
   async getAllTrips() {
-    try {
+    if (!checkFirebaseAvailability()) {
+      return await localTripService.getAllTrips();
+    }
+
+    return fastSync.readCollection(COLLECTIONS.TRIPS, async () => {
       const querySnapshot = await getDocs(
         query(collection(db, COLLECTIONS.TRIPS), orderBy('createdAt', 'desc'))
       );
-      return querySnapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id
-      }));
-    } catch (error) {
-      console.error('Error getting trips:', error);
-      throw error;
-    }
+      return querySnapshot.docs.map(d => ({ ...d.data(), id: d.id }));
+    });
   },
 
-  // Get trips by date range
+  // Get trips by date range — filtered off the cached list, no round trip
   async getTripsByDateRange(startDate, endDate) {
-    try {
-      const querySnapshot = await getDocs(
-        query(
-          collection(db, COLLECTIONS.TRIPS),
-          where('date', '>=', startDate),
-          where('date', '<=', endDate),
-          orderBy('date', 'desc')
-        )
-      );
-      return querySnapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id
-      }));
-    } catch (error) {
-      console.error('Error getting trips by date range:', error);
-      throw error;
-    }
+    const trips = await this.getAllTrips();
+    const from = asDate(startDate)?.getTime() ?? -Infinity;
+    const to = asDate(endDate)?.getTime() ?? Infinity;
+
+    return trips
+      .filter(trip => {
+        const when = asDate(trip.date)?.getTime();
+        return when !== undefined && when !== null && when >= from && when <= to;
+      })
+      .sort(byDateDesc);
   },
 
   // Get trips by vehicle
@@ -206,11 +264,18 @@ export const tripService = {
         finalUpdateData.strStatus = updateData.strStatus;
       }
       
-      const tripRef = doc(db, COLLECTIONS.TRIPS, tripId);
-      await updateDoc(tripRef, {
-        ...finalUpdateData,
-        updatedAt: serverTimestamp()
-      });
+      await fastSync.writeRecord(
+        COLLECTIONS.TRIPS,
+        tripId,
+        { ...finalUpdateData, updatedAt: new Date() },
+        () =>
+          updateDoc(doc(db, COLLECTIONS.TRIPS, tripId), {
+            ...finalUpdateData,
+            updatedAt: serverTimestamp()
+          }),
+        { op: 'update' }
+      );
+
       return { id: tripId, ...finalUpdateData };
     } catch (error) {
       console.error('Error updating trip:', error);
@@ -221,7 +286,9 @@ export const tripService = {
   // Delete trip
   async deleteTrip(tripId) {
     try {
-      await deleteDoc(doc(db, COLLECTIONS.TRIPS, tripId));
+      await fastSync.removeRecord(COLLECTIONS.TRIPS, tripId, () =>
+        deleteDoc(doc(db, COLLECTIONS.TRIPS, tripId))
+      );
       return tripId;
     } catch (error) {
       console.error('Error deleting trip:', error);
@@ -259,11 +326,18 @@ export const tripService = {
         throw new Error(`Invalid strStatus: ${strStatus}. Must be one of: ${STR_STATUS_VALUES.join(', ')}`);
       }
       
-      const tripRef = doc(db, COLLECTIONS.TRIPS, tripId);
-      await updateDoc(tripRef, {
-        strStatus: strStatus,
-        updatedAt: serverTimestamp()
-      });
+      await fastSync.writeRecord(
+        COLLECTIONS.TRIPS,
+        tripId,
+        { strStatus, updatedAt: new Date() },
+        () =>
+          updateDoc(doc(db, COLLECTIONS.TRIPS, tripId), {
+            strStatus,
+            updatedAt: serverTimestamp()
+          }),
+        { op: 'update' }
+      );
+
       return { id: tripId, strStatus };
     } catch (error) {
       console.error('Error updating STR status:', error);
@@ -286,13 +360,16 @@ export const vehicleService = {
         throw new Error(`Invalid vehicleType: ${vehicleType}. Must be one of: ${VEHICLE_TYPES.join(', ')}`);
       }
       
-      const vehicleRef = doc(db, COLLECTIONS.VEHICLES, vehicleData.vehicleNumber);
-      await setDoc(vehicleRef, {
-        ...vehicleData,
-        vehicleType,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      }, { merge: true });
+      const record = { ...vehicleData, vehicleType, updatedAt: new Date() };
+
+      await fastSync.writeRecord(COLLECTIONS.VEHICLES, vehicleData.vehicleNumber, record, () =>
+        setDoc(
+          doc(db, COLLECTIONS.VEHICLES, vehicleData.vehicleNumber),
+          { ...record, createdAt: serverTimestamp(), updatedAt: serverTimestamp() },
+          { merge: true }
+        )
+      );
+
       return { ...vehicleData, vehicleType };
     } catch (error) {
       console.error('Error adding vehicle:', error);
@@ -307,13 +384,11 @@ export const vehicleService = {
     }
     
     try {
-      const querySnapshot = await getDocs(collection(db, COLLECTIONS.VEHICLES));
-      const vehicles = querySnapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id,
-        vehicleNumber: doc.id
-      }));
-      
+      const vehicles = await fastSync.readCollection(COLLECTIONS.VEHICLES, async () => {
+        const querySnapshot = await getDocs(collection(db, COLLECTIONS.VEHICLES));
+        return querySnapshot.docs.map(d => ({ ...d.data(), id: d.id, vehicleNumber: d.id }));
+      });
+
       // Filter client-side to avoid index requirements
       return vehicles.filter(vehicle => vehicle.isActive !== false);
     } catch (error) {
@@ -392,11 +467,17 @@ export const advanceService = {
     }
     
     try {
-      const docRef = await addDoc(collection(db, COLLECTIONS.ADVANCES), {
-        ...advanceData,
-        createdAt: serverTimestamp()
-      });
-      
+      const advanceId = newId(COLLECTIONS.ADVANCES);
+      const record = { ...advanceData, createdAt: advanceData.createdAt || new Date() };
+
+      const docRef = { id: advanceId };
+      await fastSync.writeRecord(COLLECTIONS.ADVANCES, advanceId, record, () =>
+        setDoc(doc(db, COLLECTIONS.ADVANCES, advanceId), {
+          ...record,
+          createdAt: serverTimestamp()
+        })
+      );
+
       // Update trip advance summary (only if Firebase is available)
       try {
         await this.updateTripAdvanceSummary(advanceData.tripId, advanceData.advanceAmount);
@@ -590,18 +671,15 @@ export const advanceService = {
     }
     
     try {
-      const querySnapshot = await getDocs(collection(db, COLLECTIONS.ADVANCES));
-      const advances = querySnapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id
-      }));
-      
-      // Sort client-side by createdAt descending
-      return advances.sort((a, b) => {
-        const aTime = a.createdAt?.toMillis?.() || a.createdAt?.getTime?.() || 0;
-        const bTime = b.createdAt?.toMillis?.() || b.createdAt?.getTime?.() || 0;
-        return bTime - aTime;
+      const advances = await fastSync.readCollection(COLLECTIONS.ADVANCES, async () => {
+        const querySnapshot = await getDocs(collection(db, COLLECTIONS.ADVANCES));
+        return querySnapshot.docs.map(d => ({ ...d.data(), id: d.id }));
       });
+
+      // Sort client-side by createdAt descending
+      return [...advances].sort(
+        (a, b) => (asDate(b.createdAt)?.getTime() || 0) - (asDate(a.createdAt)?.getTime() || 0)
+      );
     } catch (error) {
       console.warn('Firebase getAllAdvances failed, falling back to local storage');
       return await localAdvanceService.getAllAdvances();
@@ -646,12 +724,18 @@ export const villageService = {
   // Add new village
   async addVillage(villageData) {
     try {
-      const docRef = await addDoc(collection(db, COLLECTIONS.VILLAGES), {
-        ...villageData,
-        createdAt: serverTimestamp(),
-        lastUsed: serverTimestamp()
-      });
-      return { ...villageData, id: docRef.id };
+      const villageId = newId(COLLECTIONS.VILLAGES);
+      const record = { ...villageData, createdAt: new Date(), lastUsed: new Date() };
+
+      await fastSync.writeRecord(COLLECTIONS.VILLAGES, villageId, record, () =>
+        setDoc(doc(db, COLLECTIONS.VILLAGES, villageId), {
+          ...record,
+          createdAt: serverTimestamp(),
+          lastUsed: serverTimestamp()
+        })
+      );
+
+      return { ...villageData, id: villageId };
     } catch (error) {
       console.error('Error adding village:', error);
       throw error;
@@ -661,12 +745,10 @@ export const villageService = {
   // Get all villages
   async getAllVillages() {
     try {
-      // Simplified query to avoid index requirements
-      const querySnapshot = await getDocs(collection(db, COLLECTIONS.VILLAGES));
-      const villages = querySnapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id
-      }));
+      const villages = await fastSync.readCollection(COLLECTIONS.VILLAGES, async () => {
+        const querySnapshot = await getDocs(collection(db, COLLECTIONS.VILLAGES));
+        return querySnapshot.docs.map(d => ({ ...d.data(), id: d.id }));
+      });
       
       // Filter and sort client-side to avoid composite index requirements
       return villages
@@ -681,8 +763,13 @@ export const villageService = {
   // Update village usage
   async updateVillageUsage(villageId) {
     try {
-      const villageRef = doc(db, COLLECTIONS.VILLAGES, villageId);
-      await updateDoc(villageRef, {
+      const cached = (fastSync.getMemory(COLLECTIONS.VILLAGES) || []).find(v => v.id === villageId);
+      fastSync.patchCache(COLLECTIONS.VILLAGES, villageId, {
+        usageCount: (cached?.usageCount || 0) + 1,
+        lastUsed: new Date()
+      });
+
+      await updateDoc(doc(db, COLLECTIONS.VILLAGES, villageId), {
         usageCount: increment(1),
         lastUsed: serverTimestamp()
       });
@@ -709,40 +796,33 @@ export const villageService = {
 
 // Dashboard Services
 export const dashboardService = {
-  // Get today's metrics
+  // Get today's metrics — derived from the shared cache instead of three
+  // separate Firestore queries.
   async getTodayMetrics() {
     try {
-      const today = new Date();
-      const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-      const endOfDay = new Date(today.setHours(23, 59, 59, 999));
-      
-      // Get today's trips
-      const tripsQuery = query(
-        collection(db, COLLECTIONS.TRIPS),
-        where('date', '>=', startOfDay),
-        where('date', '<=', endOfDay)
-      );
-      const tripsSnapshot = await getDocs(tripsQuery);
-      const todayTrips = tripsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-      
-      // Get today's advances
-      const advancesQuery = query(
-        collection(db, COLLECTIONS.ADVANCES),
-        where('createdAt', '>=', startOfDay),
-        where('createdAt', '<=', endOfDay)
-      );
-      const advancesSnapshot = await getDocs(advancesQuery);
-      const todayAdvances = advancesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-      
-      // Get total vehicles
-      const vehiclesSnapshot = await getDocs(
-        query(collection(db, COLLECTIONS.VEHICLES), where('isActive', '==', true))
-      );
-      
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const end = new Date();
+      end.setHours(23, 59, 59, 999);
+
+      const isToday = (value) => {
+        const when = asDate(value)?.getTime();
+        return when >= start.getTime() && when <= end.getTime();
+      };
+
+      const [trips, advances, vehicles] = await Promise.all([
+        tripService.getAllTrips(),
+        advanceService.getAllAdvances(),
+        vehicleService.getAllVehicles()
+      ]);
+
+      const todayTrips = trips.filter(trip => isToday(trip.date));
+      const todayAdvances = advances.filter(advance => isToday(advance.createdAt));
+
       return {
         todayTripsCount: todayTrips.length,
-        todayAdvancesTotal: todayAdvances.reduce((sum, advance) => sum + (advance.advanceAmount || 0), 0),
-        totalVehicles: vehiclesSnapshot.size,
+        todayAdvancesTotal: todayAdvances.reduce((sum, a) => sum + (a.advanceAmount || 0), 0),
+        totalVehicles: vehicles.length,
         recentTrips: todayTrips.slice(0, 5),
         recentAdvances: todayAdvances.slice(0, 5)
       };

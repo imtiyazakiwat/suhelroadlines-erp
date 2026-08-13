@@ -1,0 +1,21 @@
+{
+  "rules": {
+    "cache": {
+      ".read": true,
+      ".write": true,
+      "$collection": {
+        "$id": {
+          ".validate": "newData.hasChildren() || newData.val() == null"
+        }
+      }
+    },
+    "outbox": {
+      ".read": true,
+      ".write": true
+    },
+    "$other": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}

@@ -1,0 +1,255 @@
+/* ------------------------------------------------------------------ Field */
+
+.fld {
+  min-width: 0;
+}
+
+.fld--stacked + .fld--stacked {
+  margin-top: var(--gap-4);
+}
+
+.fld__label {
+  display: block;
+  margin-bottom: 6px;
+  font: var(--t-footnote);
+  font-weight: 600;
+  color: var(--label-2);
+}
+
+.fld__note {
+  margin: 5px 2px 0;
+  font: var(--t-caption-1);
+  color: var(--label-3);
+}
+
+.fld.is-invalid .fld__note {
+  color: var(--sys-red);
+  font-weight: 500;
+}
+
+/* Row layout: label left, value right — the inset grouped list idiom. */
+.fld--row {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-3);
+  min-height: var(--row-h);
+}
+
+.fld--row .fld__label {
+  flex: 0 0 auto;
+  min-width: 96px;
+  margin: 0;
+  font: var(--t-body);
+  font-weight: 400;
+  color: var(--label-1);
+}
+
+.fld--row .fld__control {
+  flex: 1;
+  min-width: 0;
+}
+
+.fld--row .fld__box {
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.fld--row .fld__input {
+  text-align: right;
+}
+
+.fld--row .fld__note {
+  display: none;
+}
+
+/* ------------------------------------------------------------------- box */
+
+.fld__box {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-2);
+  min-height: var(--control-h);
+  padding: 0 var(--gap-3);
+  background: var(--fill-4);
+  border: 0.5px solid var(--separator);
+  border-radius: var(--r-sm);
+  transition: border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+
+.fld__box--area {
+  align-items: stretch;
+  padding: var(--gap-2) var(--gap-3);
+}
+
+.fld__box:focus-within {
+  background: var(--bg-elevated);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3.5px var(--info-bg);
+}
+
+.fld.is-invalid .fld__box {
+  border-color: var(--sys-red);
+  background: var(--danger-bg);
+}
+
+.fld.is-invalid .fld__box:focus-within {
+  box-shadow: 0 0 0 3.5px var(--danger-bg);
+}
+
+/* ----------------------------------------------------------------- input */
+
+.fld__input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  padding: 0;
+  font: var(--t-callout);
+  font-size: var(--field-font); /* never below 16px */
+  letter-spacing: var(--track-body);
+  color: var(--label-1);
+  background: none;
+  border: none;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.fld__input::placeholder {
+  color: var(--label-4);
+}
+
+.fld__input--right {
+  text-align: right;
+}
+
+.fld__input--center {
+  text-align: center;
+}
+
+.fld__textarea {
+  min-height: 76px;
+  padding: 4px 0;
+  line-height: 1.4;
+  resize: none;
+}
+
+/* Native date control: strip the platform chrome, keep the picker */
+.fld__input--date::-webkit-date-and-time-value {
+  text-align: left;
+}
+
+.fld--row .fld__input--date::-webkit-date-and-time-value {
+  text-align: right;
+}
+
+.fld__input--date::-webkit-calendar-picker-indicator {
+  opacity: 0.4;
+  cursor: pointer;
+}
+
+.fld__input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+.fld__input[type='number']::-webkit-outer-spin-button,
+.fld__input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.fld__input[type='search']::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* ---------------------------------------------------------------- affixes */
+
+.fld__affix {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--label-3);
+}
+
+.fld__unit {
+  font: var(--t-callout);
+  font-size: 16px;
+  color: var(--label-2);
+}
+
+.fld__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  padding: 0;
+  color: var(--bg-elevated);
+  background: var(--label-4);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.fld__clear:active {
+  background: var(--label-3);
+}
+
+/* ------------------------------------------------------------ SearchField */
+
+.srch26 {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 var(--gap-2);
+  background: var(--fill-3);
+  border-radius: var(--r-sm);
+}
+
+.srch26__icon {
+  flex-shrink: 0;
+  color: var(--label-3);
+}
+
+.srch26__input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  font-size: var(--field-font);
+  font-family: var(--font);
+  color: var(--label-1);
+  background: none;
+  border: none;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.srch26__input::placeholder {
+  color: var(--label-3);
+}
+
+.srch26__input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.srch26__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  padding: 0;
+  color: var(--bg-elevated);
+  background: var(--label-4);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}

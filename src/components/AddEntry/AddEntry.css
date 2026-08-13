@@ -59,14 +59,14 @@
 .form-list select:focus,
 .form-list textarea:focus {
   border-color: var(--f7-theme-color);
-  box-shadow: 0 0 0 3px rgba(139, 90, 156, 0.1);
+  box-shadow: 0 0 0 3px rgba(24, 119, 242, 0.1);
   outline: none;
 }
 
 /* SL Number Input */
 .sl-number-input input {
-  background: rgba(139, 90, 156, 0.1);
-  border-color: rgba(139, 90, 156, 0.3);
+  background: rgba(24, 119, 242, 0.1);
+  border-color: rgba(24, 119, 242, 0.3);
   color: var(--f7-theme-color);
   font-weight: 600;
 }
@@ -110,8 +110,8 @@
 }
 
 .add-village-btn {
-  background: rgba(139, 90, 156, 0.1);
-  border: 1px solid rgba(139, 90, 156, 0.3);
+  background: rgba(24, 119, 242, 0.1);
+  border: 1px solid rgba(24, 119, 242, 0.3);
   border-radius: 8px;
   padding: 6px 12px;
   color: var(--f7-theme-color);
@@ -192,7 +192,7 @@
 }
 
 .form-actions .btn-secondary:hover {
-  background: rgba(139, 90, 156, 0.1);
+  background: rgba(24, 119, 242, 0.1);
 }
 
 /* Popup Styles */

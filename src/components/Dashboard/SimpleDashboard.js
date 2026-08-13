@@ -1,309 +1,248 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { dashboardService } from '../../services/firebaseService';
-import { format } from 'date-fns';
+import { homeService, formatCompactINR, formatINR } from '../../services/homeService';
+import {
+  Card,
+  SectionHeader,
+  ListSection,
+  ListRow,
+  Badge,
+  Stat,
+  EmptyState,
+  Skeleton,
+  Button,
+  GlassSurface
+} from '../../ui';
+import {
+  TruckIcon,
+  WalletIcon,
+  DocCheckIcon,
+  DocAlertIcon,
+  CardIcon,
+  TrendUpIcon,
+  FuelIcon
+} from '../Common/Icons';
 import './Dashboard.css';
+
+const EMPTY_SUMMARY = {
+  todayTrips: 0,
+  advanceToday: 0,
+  paidStrCount: 0,
+  dueStrCount: 0,
+  vehicles: { total: 0, active: 0, inTransit: 0, inactive: 0 },
+  reminders: [],
+  totalSettlement: 0,
+  avgAdvancePerTrip: 0
+};
 
 const SimpleDashboard = () => {
   const navigate = useNavigate();
-  const [metrics, setMetrics] = useState({
-    todayTripsCount: 0,
-    todayAdvancesTotal: 0,
-    totalVehicles: 0,
-    recentTrips: [],
-    recentAdvances: []
-  });
-  const [loading, setLoading] = useState(false);
-  const [initialLoad, setInitialLoad] = useState(true);
+  const [summary, setSummary] = useState(EMPTY_SUMMARY);
+  const [loading, setLoading] = useState(true);
 
-  const loadDashboardData = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
-      if (initialLoad) {
-        setLoading(true);
-        setInitialLoad(false);
-      }
-      
-      // Load data with timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout')), 10000)
-      );
-      
-      const dataPromise = dashboardService.getTodayMetrics();
-      
-      try {
-        const data = await Promise.race([dataPromise, timeoutPromise]);
-        setMetrics(data);
-      } catch (timeoutError) {
-        console.warn('Dashboard data loading timeout, using default values');
-        // Set default values if Firebase is slow/unavailable
-        setMetrics({
-          todayTripsCount: 0,
-          todayAdvancesTotal: 0,
-          totalVehicles: 0,
-          recentTrips: [],
-          recentAdvances: []
-        });
-      }
+      const data = await Promise.race([
+        homeService.getHomeSummary(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 12000))
+      ]);
+      setSummary(data);
     } catch (error) {
-      console.error('Error loading dashboard data:', error);
-      // Set default values on error
-      setMetrics({
-        todayTripsCount: 0,
-        todayAdvancesTotal: 0,
-        totalVehicles: 0,
-        recentTrips: [],
-        recentAdvances: []
-      });
+      console.warn('Home summary unavailable:', error.message);
+      setSummary(EMPTY_SUMMARY);
     } finally {
       setLoading(false);
     }
-  }, [initialLoad]);
+  }, []);
 
   useEffect(() => {
-    loadDashboardData();
-  }, [loadDashboardData]);
+    load();
+  }, [load]);
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 0
-    }).format(amount || 0);
-  };
+  const quickActions = [
+    {
+      key: 'today',
+      label: 'Today',
+      sublabel: 'Trips',
+      Icon: TruckIcon,
+      badge: summary.todayTrips,
+      to: '/reports?range=today&tab=trips'
+    },
+    { key: 'advance', label: 'Advance', Icon: WalletIcon, to: '/add-advance' },
+    { key: 'paid', label: 'Paid', sublabel: 'STR', Icon: DocCheckIcon, to: '/str-status?filter=paid' },
+    {
+      key: 'due',
+      label: 'Due',
+      sublabel: 'STR',
+      Icon: DocAlertIcon,
+      badge: summary.dueStrCount,
+      to: '/str-status?filter=due'
+    }
+  ];
 
-  // const formatTime = (date) => {
-  //   if (!date) return '';
-  //   const dateObj = date.toDate ? date.toDate() : new Date(date);
-  //   return format(dateObj, 'HH:mm');
-  // };
+  const shortcuts = [
+    { key: 'advance', label: 'Add Advance', to: '/add-advance' },
+    { key: 'export', label: 'Export CSV', to: '/reports?tab=trips' },
+    { key: 'fleet', label: 'Vehicles & Villages', to: '/settings' }
+  ];
 
   if (loading) {
     return (
-      <div className="dashboard-container">
-        <div className="loading-container">
-          <div className="loading-shimmer" style={{ height: 100, marginBottom: 16 }}></div>
-          <div className="loading-shimmer" style={{ height: 100, marginBottom: 16 }}></div>
-          <div className="loading-shimmer" style={{ height: 200 }}></div>
+      <div className="home">
+        <div className="home-skeleton">
+          <Skeleton height={92} radius="var(--r-lg)" />
+          <Skeleton height={128} radius="var(--r-lg)" />
+          <Skeleton height={240} radius="var(--r-lg)" />
+          <Skeleton height={120} radius="var(--r-lg)" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="dashboard-container">
-      {/* Welcome Section */}
-      <div className="welcome-card gradient-card">
-        <div className="welcome-content">
-          <h2>Welcome to SuhelRoadline</h2>
-          <p>Travel ERP Management System</p>
-          <div className="welcome-date">
-            {format(new Date(), 'EEEE, MMMM dd, yyyy')}
-          </div>
-        </div>
-      </div>
-
-      {/* Metrics Cards */}
-      <div className="metrics-grid">
-        <div className="metric-card fade-in">
-          <div className="metric-item">
-            <div className="metric-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M7 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path>
-                <path d="M17 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path>
-                <path d="M5 17h-2v-4m-1 -8h11a2 2 0 0 1 2 2v8"></path>
-                <path d="M9 17v-6h4v6"></path>
-              </svg>
-            </div>
-            <div className="metric-value">{metrics.todayTripsCount}</div>
-            <div className="metric-label">Today's Trips</div>
-          </div>
-        </div>
-
-        <div className="metric-card fade-in">
-          <div className="metric-item">
-            <div className="metric-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <line x1="12" y1="1" x2="12" y2="23"></line>
-                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-              </svg>
-            </div>
-            <div className="metric-value">{formatCurrency(metrics.todayAdvancesTotal)}</div>
-            <div className="metric-label">Today's Advances</div>
-          </div>
-        </div>
-
-        <div className="metric-card fade-in">
-          <div className="metric-item">
-            <div className="metric-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M7 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path>
-                <path d="M17 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path>
-                <path d="M5 17h-2v-4m-1 -8h11a2 2 0 0 1 2 2v8"></path>
-              </svg>
-            </div>
-            <div className="metric-value">{metrics.totalVehicles}</div>
-            <div className="metric-label">Total Vehicles</div>
-          </div>
-        </div>
-
-        <div className="metric-card fade-in">
-          <div className="metric-item">
-            <div className="metric-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <line x1="18" y1="20" x2="18" y2="10"></line>
-                <line x1="12" y1="20" x2="12" y2="4"></line>
-                <line x1="6" y1="20" x2="6" y2="14"></line>
-              </svg>
-            </div>
-            <div className="metric-value">
-              {metrics.recentTrips.length + metrics.recentAdvances.length}
-            </div>
-            <div className="metric-label">Recent Activities</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="action-card">
-        <h3>Quick Actions</h3>
-        <div className="quick-actions-grid">
-          <button 
-            className="quick-action-btn"
-            onClick={() => navigate('/add-entry')}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="8" x2="12" y2="16"></line>
-              <line x1="8" y1="12" x2="16" y2="12"></line>
-            </svg>
-            <span>New Trip Entry</span>
-          </button>
-          
-          <button 
-            className="quick-action-btn"
-            onClick={() => navigate('/add-advance')}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <line x1="12" y1="1" x2="12" y2="23"></line>
-              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-            </svg>
-            <span>Add Advance Payment</span>
-          </button>
-          
-          <button 
-            className="quick-action-btn"
-            onClick={() => navigate('/reports')}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <line x1="18" y1="20" x2="18" y2="10"></line>
-              <line x1="12" y1="20" x2="12" y2="4"></line>
-              <line x1="6" y1="20" x2="6" y2="14"></line>
-            </svg>
-            <span>View Analytics & Reports</span>
-          </button>
-          
-          <button 
-            className="quick-action-btn"
-            onClick={() => navigate('/settings')}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <circle cx="12" cy="12" r="3"></circle>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-            </svg>
-            <span>Settings</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Recent Activity Section */}
-      {(metrics.recentTrips.length > 0 || metrics.recentAdvances.length > 0) && (
-        <div className="recent-activity-card">
-          <h3>Recent Activity</h3>
-          <div className="activity-list">
-            {/* Recent Trips */}
-            {metrics.recentTrips.map((trip) => (
-              <div key={`trip-${trip.id}`} className="activity-item trip-activity">
-                <div className="activity-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path d="M7 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path>
-                    <path d="M17 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path>
-                    <path d="M5 17h-2v-4m-1 -8h11a2 2 0 0 1 2 2v8"></path>
-                  </svg>
-                </div>
-                <div className="activity-content">
-                  <div className="activity-title">
-                    Trip #{trip.slNumber} - {trip.vehicleNumber}
-                    {trip.driverName && <span className="activity-driver"> • {trip.driverName}</span>}
-                  </div>
-                  <div className="activity-details">
-                    <span className="activity-date">
-                      {trip.date ? format(trip.date.toDate ? trip.date.toDate() : new Date(trip.date), 'MMM dd, yyyy') : 'Today'}
-                    </span>
-                    {trip.quantity > 0 && (
-                      <span className="activity-quantity"> • Qty: {trip.quantity}</span>
-                    )}
-                  </div>
-                </div>
-                <div className="activity-status">
-                  <span className={`status-badge ${trip.strStatus === 'Received' ? 'received' : 'pending'}`}>
-                    {trip.strStatus || 'not received'}
-                  </span>
-                </div>
-              </div>
-            ))}
-
-            {/* Recent Advances */}
-            {metrics.recentAdvances.map((advance) => (
-              <div key={`advance-${advance.id}`} className="activity-item advance-activity">
-                <div className="activity-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <line x1="12" y1="1" x2="12" y2="23"></line>
-                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                  </svg>
-                </div>
-                <div className="activity-content">
-                  <div className="activity-title">
-                    Advance - {advance.vehicleNumber}
-                    {advance.tripId && <span className="activity-trip"> • Trip #{advance.tripId.slice(-4)}</span>}
-                  </div>
-                  <div className="activity-details">
-                    <span className="activity-amount">{formatCurrency(advance.advanceAmount)}</span>
-                    <span className="activity-date">
-                      {advance.createdAt ? format(advance.createdAt.toDate ? advance.createdAt.toDate() : new Date(advance.createdAt), 'MMM dd, HH:mm') : 'Today'}
-                    </span>
-                  </div>
-                </div>
-                <div className="activity-type">
-                  <span className={`type-badge ${advance.advanceType || 'additional'}`}>
-                    {advance.advanceType === 'initial' ? 'Initial' : 'Additional'}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Empty State */}
-      {metrics.recentTrips.length === 0 && metrics.recentAdvances.length === 0 && (
-        <div className="empty-state-card">
-          <div className="empty-state">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2z"></path>
-              <line x1="8" y1="1" x2="8" y2="4"></line>
-              <line x1="16" y1="1" x2="16" y2="4"></line>
-            </svg>
-            <h3>No Activities Yet</h3>
-            <p>Start by adding your first trip entry or advance payment</p>
-            <button 
-              className="btn-primary"
-              onClick={() => navigate('/add-entry')}
-            >
-              Add First Entry
+    <div className="home">
+      {/* ------------------------------- Quick actions ------------------------------- */}
+      <section className="home-block">
+        <h2 className="home-block__title">Quick Actions</h2>
+        <div className="qa">
+          {quickActions.map(({ key, label, sublabel, Icon, badge, to }) => (
+            <button type="button" key={key} className="qa__tile" onClick={() => navigate(to)}>
+              <GlassSurface variant="regular" capsule className="qa__disc">
+                <Icon size={25} />
+                {badge > 0 && <span className="qa__badge">{badge > 99 ? '99+' : badge}</span>}
+              </GlassSurface>
+              <span className="qa__label">
+                <span>{label}</span>
+                {sublabel && <span>{sublabel}</span>}
+              </span>
             </button>
+          ))}
+        </div>
+      </section>
+
+      {/* ------------------------------- Fleet summary ------------------------------- */}
+      <Card className="home-card">
+        <SectionHeader title="Total Vehicles" onAction={() => navigate('/settings')} />
+
+        <div className="fleet">
+          <span className="fleet__icon">
+            <TruckIcon size={28} />
+          </span>
+
+          <div className="fleet__count">
+            <span className="fleet__value">{summary.vehicles.total}</span>
+            <span className="fleet__caption">Total Vehicles</span>
+          </div>
+
+          <div className="fleet__stats">
+            <Stat value={summary.vehicles.active} label="Active" tone="success" dot />
+            <Stat value={summary.vehicles.inTransit} label="In Transit" tone="accent" dot />
+            <Stat value={summary.vehicles.inactive} label="Inactive" tone="neutral" dot />
           </div>
         </div>
-      )}
+      </Card>
+
+      {/* --------------------------------- Reminders --------------------------------- */}
+      <section className="home-block">
+        <SectionHeader
+          title="Reminders"
+          onAction={() => navigate('/str-status?filter=due')}
+          className="home-block__header"
+        />
+
+        {summary.reminders.length > 0 ? (
+          <>
+            <ListSection inset={false}>
+              {summary.reminders.map((reminder) => (
+                <ListRow
+                  key={reminder.id}
+                  icon={<DocAlertIcon size={17} />}
+                  iconTone="danger"
+                  title={reminder.title}
+                  subtitle={reminder.vehicleNumber}
+                  detail={`${formatCompactINR(reminder.amount)} Due STR`}
+                  value={reminder.dayLabel}
+                  chevron
+                  onClick={() => navigate('/str-status?filter=due')}
+                />
+              ))}
+            </ListSection>
+
+            <Button
+              variant="plain"
+              block
+              className="home-block__footer-link"
+              onClick={() => navigate('/str-status?filter=due')}
+            >
+              View All Due STR Alerts
+            </Button>
+          </>
+        ) : (
+          <Card padded={false} inset={false}>
+            <EmptyState
+              icon={<DocCheckIcon size={26} />}
+              title="All caught up"
+              message="Every STR is marked received."
+            />
+          </Card>
+        )}
+      </section>
+
+      {/* ------------------------------ Promo + stats ------------------------------ */}
+      <section className="home-grid">
+        <Card padded={false} inset={false} className="promo">
+          <button type="button" className="promo__hit" onClick={() => navigate('/add-advance')}>
+            <span className="promo__icon">
+              <FuelIcon size={24} />
+              <span className="promo__icon-badge">₹</span>
+            </span>
+            <span className="promo__title">Save on Diesel Expenses</span>
+            <Badge tone="success">Get 4% Cashback</Badge>
+            <span className="promo__art" aria-hidden="true">
+              <TruckIcon size={74} />
+            </span>
+          </button>
+        </Card>
+
+        <div className="home-grid__stack">
+          <ListSection inset={false}>
+            <ListRow
+              icon={<CardIcon size={17} />}
+              iconTone="accent"
+              title={formatCompactINR(summary.totalSettlement)}
+              subtitle="Total Settlement"
+              chevron
+              onClick={() => navigate('/reports')}
+              className="mini-row"
+            />
+          </ListSection>
+
+          <ListSection inset={false}>
+            <ListRow
+              icon={<TrendUpIcon size={17} />}
+              iconTone="brand"
+              title={`Avg ${
+                summary.avgAdvancePerTrip >= 100000
+                  ? formatCompactINR(summary.avgAdvancePerTrip)
+                  : formatINR(summary.avgAdvancePerTrip)
+              }`}
+              subtitle="Per Trip Advance"
+              chevron
+              onClick={() => navigate('/reports')}
+              className="mini-row"
+            />
+          </ListSection>
+        </div>
+      </section>
+
+      {/* --------------------------------- Shortcuts --------------------------------- */}
+      <div className="shortcuts">
+        {shortcuts.map(({ key, label, to }) => (
+          <Button key={key} variant="glass" size="sm" capsule onClick={() => navigate(to)}>
+            {label}
+          </Button>
+        ))}
+      </div>
     </div>
   );
 };

@@ -1,0 +1,169 @@
+.btn26 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-2);
+  min-height: var(--control-h);
+  padding: 0 var(--gap-5);
+  font: var(--t-headline);
+  letter-spacing: var(--track-headline);
+  color: var(--label-1);
+  background: var(--fill-3);
+  border: none;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-fast) var(--ease-spring),
+    opacity var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+
+.btn26:active:not(:disabled) {
+  transform: scale(var(--press-scale));
+  opacity: var(--press-opacity);
+}
+
+.btn26:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ------------------------------------------------------------- variants */
+
+.btn26--filled {
+  color: #fff;
+  background: var(--accent);
+}
+
+.btn26--tinted {
+  color: var(--accent);
+  background: var(--info-bg);
+}
+
+.btn26--gray {
+  color: var(--label-1);
+  background: var(--fill-3);
+}
+
+.btn26--plain {
+  min-height: auto;
+  padding: 0;
+  color: var(--accent);
+  background: none;
+}
+
+/* Glass buttons get their fill from GlassSurface, so clear the base fill */
+.btn26--glass {
+  background: none;
+  color: var(--label-1);
+}
+
+.btn26--glass .glass__content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-2);
+  min-height: var(--control-h);
+  padding: 0 var(--gap-5);
+}
+
+/* ---------------------------------------------------------------- intents */
+
+.btn26--destructive.btn26--filled {
+  background: var(--sys-red);
+  color: #fff;
+}
+
+.btn26--destructive.btn26--tinted {
+  color: var(--sys-red);
+  background: var(--danger-bg);
+}
+
+.btn26--destructive.btn26--gray,
+.btn26--destructive.btn26--plain,
+.btn26--destructive.btn26--glass {
+  color: var(--sys-red);
+}
+
+.btn26--brand.btn26--filled {
+  background: var(--brand);
+  color: #fff;
+}
+
+.btn26--brand.btn26--tinted {
+  color: var(--brand);
+  background: var(--brand-tint);
+}
+
+/* ------------------------------------------------------------------ sizes */
+
+.btn26--sm {
+  min-height: var(--control-h-sm);
+  padding: 0 var(--gap-3);
+  font: var(--t-footnote);
+  font-weight: 600;
+  border-radius: var(--r-sm);
+}
+
+.btn26--lg {
+  min-height: var(--control-h-lg);
+  padding: 0 var(--gap-6);
+  border-radius: var(--r-md);
+}
+
+.btn26--sm.btn26--glass .glass__content {
+  min-height: var(--control-h-sm);
+  padding: 0 var(--gap-3);
+}
+
+.btn26--lg.btn26--glass .glass__content {
+  min-height: var(--control-h-lg);
+  padding: 0 var(--gap-6);
+}
+
+.btn26--capsule {
+  border-radius: var(--r-capsule);
+}
+
+.btn26--block {
+  display: flex;
+  width: 100%;
+}
+
+/* ----------------------------------------------------------------- innards */
+
+.btn26__icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.btn26__label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn26__spinner {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  opacity: 0.85;
+  animation: btn26-spin 0.7s linear infinite;
+}
+
+@keyframes btn26-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.btn26.is-loading {
+  cursor: progress;
+}

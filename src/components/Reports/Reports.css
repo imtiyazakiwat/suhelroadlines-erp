@@ -33,8 +33,8 @@
 }
 
 .quick-filter-btn {
-  background: rgba(139, 90, 156, 0.1);
-  border: 1px solid rgba(139, 90, 156, 0.3);
+  background: rgba(24, 119, 242, 0.1);
+  border: 1px solid rgba(24, 119, 242, 0.3);
   border-radius: 8px;
   padding: 8px 16px;
   color: var(--f7-theme-color);
@@ -46,7 +46,7 @@
 
 .quick-filter-btn:hover,
 .quick-filter-btn:active {
-  background: rgba(139, 90, 156, 0.2);
+  background: rgba(24, 119, 242, 0.2);
 }
 
 /* Filter List */
@@ -78,7 +78,7 @@
 
 .filter-list input:focus {
   border-color: var(--f7-theme-color);
-  box-shadow: 0 0 0 3px rgba(139, 90, 156, 0.1);
+  box-shadow: 0 0 0 3px rgba(24, 119, 242, 0.1);
   outline: none;
 }
 
@@ -183,8 +183,8 @@
 }
 
 .segmented button {
-  background: rgba(139, 90, 156, 0.1);
-  border: 1px solid rgba(139, 90, 156, 0.3);
+  background: rgba(24, 119, 242, 0.1);
+  border: 1px solid rgba(24, 119, 242, 0.3);
   color: var(--f7-theme-color);
   font-weight: 600;
 }
@@ -469,14 +469,14 @@
 @media (hover: hover) and (pointer: fine) {
   .trip-item:hover,
   .advance-item:hover {
-    background: rgba(139, 90, 156, 0.05);
+    background: rgba(24, 119, 242, 0.05);
     border-radius: 8px;
     transition: all 0.2s ease;
   }
   
   .quick-filter-btn:hover {
     transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(139, 90, 156, 0.2);
+    box-shadow: 0 2px 8px rgba(24, 119, 242, 0.2);
   }
   
   .filter-actions .btn-primary:hover {
@@ -515,12 +515,12 @@
 }
 
 .quick-filters::-webkit-scrollbar-thumb {
-  background: rgba(139, 90, 156, 0.3);
+  background: rgba(24, 119, 242, 0.3);
   border-radius: 2px;
 }
 
 .quick-filters::-webkit-scrollbar-thumb:hover {
-  background: rgba(139, 90, 156, 0.5);
+  background: rgba(24, 119, 242, 0.5);
 }
 
 /* Edit Trip Popup Styles */
@@ -617,8 +617,8 @@
 }
 
 .edit-trip-popup .village-chip {
-  background: rgba(139, 90, 156, 0.1);
-  border: 1px solid rgba(139, 90, 156, 0.3);
+  background: rgba(24, 119, 242, 0.1);
+  border: 1px solid rgba(24, 119, 242, 0.3);
   border-radius: 16px;
   padding: 6px 12px;
   font-size: 14px;
@@ -668,8 +668,8 @@
 }
 
 .edit-trip-btn {
-  background: rgba(139, 90, 156, 0.1);
-  border: 1px solid rgba(139, 90, 156, 0.3);
+  background: rgba(24, 119, 242, 0.1);
+  border: 1px solid rgba(24, 119, 242, 0.3);
   border-radius: 8px;
   padding: 6px;
   color: var(--f7-theme-color);

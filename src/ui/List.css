@@ -1,0 +1,194 @@
+.lst26 {
+  min-width: 0;
+}
+
+.lst26--inset {
+  padding: 0 var(--gutter);
+}
+
+.lst26__header {
+  margin: 0 var(--gap-4) 7px;
+  font: var(--t-footnote);
+  font-weight: 600;
+  color: var(--label-2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.lst26__footer {
+  margin: 7px var(--gap-4) 0;
+  font: var(--t-caption-1);
+  color: var(--label-3);
+}
+
+.lst26__card {
+  overflow: hidden;
+  background: var(--bg-grouped-secondary);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-2);
+}
+
+/* -------------------------------------------------------------------- row */
+
+.lst26__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--gap-3);
+  width: 100%;
+  min-height: var(--hit);
+  padding: var(--gap-2) var(--gap-4);
+  font: var(--t-body);
+  color: var(--label-1);
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: default;
+  transition: background-color var(--dur-instant) var(--ease-out);
+}
+
+/* Inset separator: starts at the text, not the card edge. */
+.lst26__row::after {
+  content: '';
+  position: absolute;
+  left: var(--gap-4);
+  right: 0;
+  bottom: 0;
+  height: 0.5px;
+  background: var(--separator);
+}
+
+.lst26__row:last-child::after {
+  display: none;
+}
+
+.lst26__row.is-interactive {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lst26__row.is-interactive:active {
+  background: var(--fill-4);
+}
+
+.lst26__row.is-destructive .lst26__title {
+  color: var(--sys-red);
+}
+
+/* ------------------------------------------------------------------- icon */
+
+.lst26__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 8px;
+}
+
+.lst26__icon--neutral {
+  color: var(--label-2);
+  background: var(--fill-4);
+}
+.lst26__icon--accent {
+  color: #fff;
+  background: var(--accent);
+}
+.lst26__icon--brand {
+  color: #fff;
+  background: var(--brand);
+}
+.lst26__icon--success {
+  color: #fff;
+  background: var(--sys-green);
+}
+.lst26__icon--danger {
+  color: #fff;
+  background: var(--sys-red);
+}
+.lst26__icon--warning {
+  color: #fff;
+  background: var(--sys-orange);
+}
+.lst26__icon--plain {
+  color: var(--label-2);
+  background: none;
+  width: auto;
+  height: auto;
+}
+
+/* ------------------------------------------------------------------- text */
+
+.lst26__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 1px;
+}
+
+.lst26__title {
+  font: var(--t-body);
+  letter-spacing: var(--track-body);
+  color: var(--label-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lst26__subtitle {
+  font: var(--t-footnote);
+  color: var(--label-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lst26__detail {
+  font: var(--t-caption-1);
+  color: var(--label-3);
+}
+
+/* --------------------------------------------------------------- trailing */
+
+.lst26__trailing {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-2);
+  flex-shrink: 0;
+}
+
+.lst26__value {
+  font: var(--t-body);
+  color: var(--label-2);
+  white-space: nowrap;
+}
+
+.lst26__value--strong {
+  font-weight: 600;
+  color: var(--label-1);
+}
+.lst26__value--success {
+  font-weight: 600;
+  color: var(--success);
+}
+.lst26__value--danger {
+  font-weight: 600;
+  color: var(--sys-red);
+}
+.lst26__value--mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.lst26__chevron {
+  flex-shrink: 0;
+  color: var(--label-4);
+}
+
+/* A row that hosts a field shouldn't double its padding */
+.lst26__row .fld--row {
+  flex: 1;
+  min-width: 0;
+}

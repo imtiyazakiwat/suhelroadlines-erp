@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { CSVLink } from 'react-csv';
-import { tripService, vehicleService, advanceService, villageService } from '../../services/firebaseService';
+import { tripService, vehicleService, advanceService } from '../../services/firebaseService';
 import { calculateAdvanceTotals, formatCurrency as utilFormatCurrency } from '../../types';
 import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays } from 'date-fns';
 import Toast from '../Common/Toast';
 import './ReportsPage.css';
 
 const ReportsPage = () => {
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('trips');
   const [filters, setFilters] = useState({
     dateFrom: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
@@ -54,12 +56,8 @@ const ReportsPage = () => {
 
   const loadInitialData = useCallback(async () => {
     try {
-      const [vehicleList, villageList] = await Promise.all([
-        vehicleService.getAllVehicles(),
-        villageService.getAllVillages()
-      ]);
+      const vehicleList = await vehicleService.getAllVehicles();
       setVehicles(vehicleList);
-      // Removed setAllVillages since allVillages state was removed
     } catch (error) {
       console.error('Error loading initial data:', error);
     }
@@ -294,6 +292,16 @@ const ReportsPage = () => {
       village: ''
     });
   };
+
+  // Deep links: /reports?range=today|week|month|year&tab=trips|advances
+  useEffect(() => {
+    const range = searchParams.get('range');
+    if (range) setQuickDateFilter(range);
+
+    const tab = searchParams.get('tab');
+    if (tab === 'trips' || tab === 'advances') setActiveTab(tab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const showToastMessage = (message) => {
     setToastMessage(message);

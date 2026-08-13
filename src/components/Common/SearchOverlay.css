@@ -1,0 +1,26 @@
+/* Search sheet. Structure comes from the Sheet primitive; this only handles
+   the sticky control strip and result spacing. */
+
+.srch-sheet__controls {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  padding: 0 0 var(--gap-3);
+  background: var(--glass-regular-tint);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.srch-sheet__group + .srch-sheet__group {
+  margin-top: var(--gap-4);
+}
+
+.srch-sheet__total {
+  margin: var(--gap-4) 0 0;
+  font: var(--t-footnote);
+  color: var(--label-3);
+  text-align: center;
+}

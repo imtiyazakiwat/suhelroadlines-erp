@@ -1,0 +1,333 @@
+/* =============================================================================
+   iOS 26 token layer
+   Colour, type, metrics, materials and motion. Everything downstream reads
+   from here — no component defines a raw colour or duration.
+
+   Liquid Glass rules encoded in these tokens (WWDC25 "Meet Liquid Glass"):
+   - glass belongs to the navigation layer floating above content, never to
+     content itself, so there are exactly two material recipes and both are
+     meant for chrome
+   - "regular" adapts and stays legible over anything; "clear" is more
+     transparent and requires a dimming layer beneath it
+   - never stack glass on glass
+   ========================================================================== */
+
+:root {
+  /* ---------------------------------------------------------------- palette */
+  /* iOS system colours, light appearance */
+  --sys-blue: #007AFF;
+  --sys-green: #34C759;
+  --sys-indigo: #5856D6;
+  --sys-orange: #FF9500;
+  --sys-pink: #FF2D55;
+  --sys-purple: #AF52DE;
+  --sys-red: #FF3B30;
+  --sys-teal: #30B0C7;
+  --sys-yellow: #FFCC00;
+  --sys-mint: #00C7BE;
+  --sys-cyan: #32ADE6;
+  --sys-brown: #A2845E;
+
+  /* brand */
+  --brand: #0C2A5B;
+  --brand-2: #14386F;
+  --brand-tint: #EAF0FA;
+  --brand-gradient: linear-gradient(160deg, #14386F 0%, #0A2450 100%);
+  --accent: var(--sys-blue);
+
+  /* labels */
+  --label-1: #0D1B34;
+  --label-2: rgba(13, 27, 52, 0.62);
+  --label-3: rgba(13, 27, 52, 0.42);
+  --label-4: rgba(13, 27, 52, 0.26);
+
+  /* backgrounds — grouped list convention */
+  --bg-grouped: #F2F2F7;
+  --bg-grouped-secondary: #FFFFFF;
+  --bg-elevated: #FFFFFF;
+
+  /* fills */
+  --fill-1: rgba(118, 118, 128, 0.2);
+  --fill-2: rgba(118, 118, 128, 0.16);
+  --fill-3: rgba(118, 118, 128, 0.12);
+  --fill-4: rgba(118, 118, 128, 0.08);
+
+  /* separators */
+  --separator: rgba(60, 60, 67, 0.16);
+  --separator-opaque: #C6C6C8;
+
+  /* semantic */
+  --success: #12A150;
+  --success-bg: rgba(52, 199, 89, 0.14);
+  --danger: #E5342B;
+  --danger-bg: rgba(255, 59, 48, 0.12);
+  --warning: #E8890C;
+  --warning-bg: rgba(255, 149, 0, 0.14);
+  --info-bg: rgba(0, 122, 255, 0.12);
+
+  /* ----------------------------------------------------------- typography */
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+    'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-rounded: -apple-system-rounded, ui-rounded, 'SF Pro Rounded', var(--font);
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+
+  /* iOS text styles: size / line-height / weight / tracking */
+  --t-large-title: 700 34px/41px var(--font);
+  --t-title-1: 700 28px/34px var(--font);
+  --t-title-2: 700 22px/28px var(--font);
+  --t-title-3: 600 20px/25px var(--font);
+  --t-headline: 600 17px/22px var(--font);
+  --t-body: 400 17px/22px var(--font);
+  --t-callout: 400 16px/21px var(--font);
+  --t-subhead: 400 15px/20px var(--font);
+  --t-footnote: 400 13px/18px var(--font);
+  --t-caption-1: 400 12px/16px var(--font);
+  --t-caption-2: 400 11px/13px var(--font);
+
+  --track-large-title: -0.4px;
+  --track-title-1: -0.35px;
+  --track-title-2: -0.3px;
+  --track-headline: -0.25px;
+  --track-body: -0.2px;
+  --track-caption: 0;
+
+  /* --------------------------------------------------------------- metrics */
+  --hit: 44px;            /* minimum touch target */
+  --control-h: 44px;
+  --control-h-sm: 34px;
+  --control-h-lg: 50px;
+  --row-h: 44px;
+  --field-font: 16px;     /* below this iOS Safari zooms on focus */
+
+  --gutter: 16px;         /* page side margin */
+  --gap-1: 4px;
+  --gap-2: 8px;
+  --gap-3: 12px;
+  --gap-4: 16px;
+  --gap-5: 20px;
+  --gap-6: 24px;
+  --gap-8: 32px;
+
+  /* Concentric radii: a nested corner equals the parent radius minus the
+     inset between them, which is how iOS 26 keeps curves optically parallel. */
+  --r-xs: 6px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-xl: 22px;
+  --r-2xl: 28px;
+  --r-sheet: 38px;
+  --r-capsule: 999px;
+
+  /* safe areas */
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+
+  /* chrome */
+  --navbar-h: 44px;
+  --tabbar-h: 58px;
+  --tabbar-inset: 12px;   /* float distance from the screen edge */
+
+  /* ------------------------------------------------------------- elevation */
+  --sh-1: 0 1px 2px rgba(13, 27, 52, 0.05);
+  --sh-2: 0 1px 3px rgba(13, 27, 52, 0.06), 0 4px 12px rgba(13, 27, 52, 0.04);
+  --sh-3: 0 2px 8px rgba(13, 27, 52, 0.07), 0 12px 28px rgba(13, 27, 52, 0.06);
+  --sh-4: 0 8px 24px rgba(13, 27, 52, 0.12), 0 2px 6px rgba(13, 27, 52, 0.06);
+  --sh-5: 0 24px 56px rgba(13, 27, 52, 0.22);
+
+  /* ------------------------------------------------- Liquid Glass materials */
+  /* regular: the default. Legible over any backdrop. */
+  --glass-regular-tint: rgba(255, 255, 255, 0.55);
+  --glass-regular-blur: 24px;
+  --glass-regular-saturate: 180%;
+  --glass-regular-brightness: 108%;
+  --glass-regular-border: rgba(255, 255, 255, 0.65);
+  --glass-regular-inner: rgba(255, 255, 255, 0.5);
+  --glass-regular-shade: rgba(13, 27, 52, 0.06);
+
+  /* clear: more transparent, for use over media with a dimming layer. */
+  --glass-clear-tint: rgba(255, 255, 255, 0.18);
+  --glass-clear-blur: 12px;
+  --glass-clear-saturate: 150%;
+  --glass-clear-brightness: 104%;
+  --glass-clear-border: rgba(255, 255, 255, 0.4);
+  --glass-clear-inner: rgba(255, 255, 255, 0.3);
+  --glass-clear-shade: rgba(13, 27, 52, 0.1);
+  --glass-clear-dim: rgba(13, 27, 52, 0.18);
+
+  /* specular highlight sweep shared by both variants */
+  --glass-specular: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.7) 0%,
+    rgba(255, 255, 255, 0.12) 28%,
+    rgba(255, 255, 255, 0) 55%,
+    rgba(255, 255, 255, 0.18) 100%
+  );
+
+  /* ---------------------------------------------------------------- motion */
+  /* iOS uses springs, not bezier ramps. These are fitted approximations. */
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring-soft: cubic-bezier(0.4, 0.8, 0.2, 1);
+  --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-in-out: cubic-bezier(0.42, 0, 0.58, 1);
+
+  --dur-instant: 100ms;
+  --dur-fast: 180ms;
+  --dur-base: 280ms;
+  --dur-slow: 400ms;
+  --dur-sheet: 460ms;
+
+  /* press feedback: iOS scales and dims rather than changing colour */
+  --press-scale: 0.96;
+  --press-opacity: 0.72;
+
+  /* ----------------------------------------------------------------- layers */
+  --z-content: 1;
+  --z-navbar: 100;
+  --z-tabbar: 110;
+  --z-fab: 120;
+  --z-backdrop: 200;
+  --z-sheet: 210;
+  --z-popover: 220;
+  --z-alert: 230;
+  --z-toast: 240;
+}
+
+/* ------------------------------------------------------------- dark mode */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --label-1: #FFFFFF;
+    --label-2: rgba(235, 235, 245, 0.62);
+    --label-3: rgba(235, 235, 245, 0.4);
+    --label-4: rgba(235, 235, 245, 0.24);
+
+    --bg-grouped: #000000;
+    --bg-grouped-secondary: #1C1C1E;
+    --bg-elevated: #1C1C1E;
+
+    --fill-1: rgba(120, 120, 128, 0.36);
+    --fill-2: rgba(120, 120, 128, 0.32);
+    --fill-3: rgba(120, 120, 128, 0.24);
+    --fill-4: rgba(120, 120, 128, 0.18);
+
+    --separator: rgba(84, 84, 88, 0.6);
+    --separator-opaque: #38383A;
+
+    --brand-tint: rgba(10, 132, 255, 0.16);
+    --accent: #0A84FF;
+    --sys-blue: #0A84FF;
+    --sys-green: #30D158;
+    --sys-red: #FF453A;
+    --sys-orange: #FF9F0A;
+
+    --success: #30D158;
+    --success-bg: rgba(48, 209, 88, 0.18);
+    --danger: #FF453A;
+    --danger-bg: rgba(255, 69, 58, 0.18);
+    --info-bg: rgba(10, 132, 255, 0.18);
+
+    /* glass inverts: dark tint, dimmer highlights */
+    --glass-regular-tint: rgba(28, 28, 30, 0.62);
+    --glass-regular-border: rgba(255, 255, 255, 0.16);
+    --glass-regular-inner: rgba(255, 255, 255, 0.1);
+    --glass-regular-shade: rgba(0, 0, 0, 0.4);
+
+    --glass-clear-tint: rgba(28, 28, 30, 0.28);
+    --glass-clear-border: rgba(255, 255, 255, 0.12);
+    --glass-clear-inner: rgba(255, 255, 255, 0.08);
+    --glass-clear-dim: rgba(0, 0, 0, 0.28);
+
+    --glass-specular: linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.22) 0%,
+      rgba(255, 255, 255, 0.05) 30%,
+      rgba(255, 255, 255, 0) 60%,
+      rgba(255, 255, 255, 0.08) 100%
+    );
+
+    --sh-2: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
+    --sh-3: 0 2px 8px rgba(0, 0, 0, 0.45), 0 12px 28px rgba(0, 0, 0, 0.35);
+    --sh-4: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --sh-5: 0 24px 56px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* --------------------------------------------------- accessibility overrides
+   iOS 26 exposes Reduce Transparency and Increase Contrast, and glass must
+   collapse to a solid surface when either is on. */
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass-regular-tint: var(--bg-elevated);
+    --glass-regular-blur: 0px;
+    --glass-regular-saturate: 100%;
+    --glass-regular-brightness: 100%;
+    --glass-clear-tint: var(--bg-elevated);
+    --glass-clear-blur: 0px;
+    --glass-clear-saturate: 100%;
+    --glass-clear-brightness: 100%;
+    --glass-specular: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --label-2: rgba(13, 27, 52, 0.85);
+    --label-3: rgba(13, 27, 52, 0.7);
+    --separator: rgba(60, 60, 67, 0.5);
+    --glass-regular-tint: rgba(255, 255, 255, 0.9);
+    --glass-clear-tint: rgba(255, 255, 255, 0.85);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-instant: 0.01ms;
+    --dur-fast: 0.01ms;
+    --dur-base: 0.01ms;
+    --dur-slow: 0.01ms;
+    --dur-sheet: 0.01ms;
+    --press-scale: 1;
+  }
+}
+
+/* ------------------------------------------------------------------- base */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font: var(--t-body);
+  letter-spacing: var(--track-body);
+  color: var(--label-1);
+  background: var(--bg-grouped);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+/* Any focusable control keeps a visible ring for keyboard users only */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Fields must never be under 16px or iOS zooms the viewport on focus */
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: var(--field-font);
+}

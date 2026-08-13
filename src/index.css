@@ -1,71 +1,55 @@
-/* SuhelRoadline Travel ERP - Global Styles */
+/* Suhel Roadlines — global base */
 
-* {
-  box-sizing: border-box;
-}
-
+html,
 body {
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background: linear-gradient(135deg, #8B5A9C 0%, #4A9B9B 100%);
-  min-height: 100vh;
+  height: 100%;
+  background: #F2F4F7;
   overflow-x: hidden;
 }
 
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
 #root {
-  min-height: 100vh;
-  background: transparent;
+  height: 100%;
+  background: #F2F4F7;
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  font-family: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
 }
 
-/* iOS-specific optimizations */
-@supports (-webkit-touch-callout: none) {
-  body {
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    -webkit-tap-highlight-color: transparent;
-  }
-}
-
-/* Scrollbar styling */
+/* Native-feeling chrome: no visible scrollbars, momentum scrolling */
 ::-webkit-scrollbar {
-  width: 4px;
+  width: 0;
+  height: 0;
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(139, 90, 156, 0.3);
-  border-radius: 2px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(139, 90, 156, 0.5);
-}
-
-/* Disable text selection on UI elements */
-button, .btn, .navbar, .toolbar, .list-item {
+/* Chrome elements should not be selectable/long-pressable like web text */
+button,
+.btn,
+.ios-navbar,
+.ios-tabbar,
+.list-item,
+.qa-tile {
   -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
   user-select: none;
+  -webkit-touch-callout: none;
 }
 
-/* Allow text selection in input fields and content areas */
-input, textarea, .content-area {
+/* ...but real text input must stay selectable */
+input,
+textarea,
+[contenteditable] {
   -webkit-user-select: text;
-  -moz-user-select: text;
-  -ms-user-select: text;
   user-select: text;
+  -webkit-touch-callout: default;
 }
