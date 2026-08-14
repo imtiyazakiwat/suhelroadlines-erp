@@ -803,6 +803,55 @@ export const villageService = {
     }
   },
 
+  // Update village. The old Settings and VillageList screens called this and
+  // villageService.deleteVillage, but neither existed — every village edit and
+  // delete threw and was swallowed by the caller's catch.
+  async updateVillage(villageId, updateData) {
+    if (!checkFirebaseAvailability()) {
+      throw new Error('Cannot update a village while offline storage is in use');
+    }
+
+    try {
+      await fastSync.writeRecord(
+        COLLECTIONS.VILLAGES,
+        villageId,
+        { ...updateData, updatedAt: new Date() },
+        () =>
+          updateDoc(doc(db, COLLECTIONS.VILLAGES, villageId), {
+            ...updateData,
+            updatedAt: serverTimestamp()
+          }),
+        { op: 'update' }
+      );
+
+      return { id: villageId, ...updateData };
+    } catch (error) {
+      console.error('Error updating village:', error);
+      throw error;
+    }
+  },
+
+  // Delete village (soft delete, matching vehicles)
+  async deleteVillage(villageId) {
+    if (!checkFirebaseAvailability()) {
+      throw new Error('Cannot delete a village while offline storage is in use');
+    }
+
+    try {
+      await fastSync.removeRecord(COLLECTIONS.VILLAGES, villageId, () =>
+        updateDoc(doc(db, COLLECTIONS.VILLAGES, villageId), {
+          isActive: false,
+          updatedAt: serverTimestamp()
+        })
+      );
+
+      return villageId;
+    } catch (error) {
+      console.error('Error deleting village:', error);
+      throw error;
+    }
+  },
+
   // Update village usage
   async updateVillageUsage(villageId) {
     if (!checkFirebaseAvailability()) return;

@@ -44,6 +44,7 @@ export const useScrolled = (threshold = SCROLL_ON) => {
 
 const NavBar = ({
   title,
+  subtitle = null,
   largeTitle = false,
   leading = null,
   trailing = null,
@@ -71,7 +72,18 @@ const NavBar = ({
         <div className="nav26__bar">
           <div className="nav26__side">{leading}</div>
 
-          <h1 className={`nav26__title ${largeTitle && !scrolled ? 'is-hidden' : ''}`.trim()}>{title}</h1>
+          {subtitle ? (
+            /* Stacked title, the way UINavigationItem shows a prompt: the
+               screen keeps its name and the state sits underneath it. */
+            <div className="nav26__titles">
+              <h1 className="nav26__title">{title}</h1>
+              <span className="nav26__subtitle">{subtitle}</span>
+            </div>
+          ) : (
+            <h1 className={`nav26__title ${largeTitle && !scrolled ? 'is-hidden' : ''}`.trim()}>
+              {title}
+            </h1>
+          )}
 
           <div className="nav26__side nav26__side--end">{trailing}</div>
         </div>

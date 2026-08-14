@@ -104,7 +104,7 @@ const SimpleDashboard = () => {
       {/* ------------------------------- Quick actions ------------------------------- */}
       <section className="home-block">
         <h2 className="home-block__title">Quick Actions</h2>
-        <div className="qa">
+        <div className="qa stg26">
           {quickActions.map(({ key, label, sublabel, Icon, badge, to }) => (
             <button type="button" key={key} className="qa__tile" onClick={() => navigate(to)}>
               <GlassSurface variant="regular" capsule className="qa__disc">
@@ -152,7 +152,7 @@ const SimpleDashboard = () => {
 
         {summary.reminders.length > 0 ? (
           <>
-            <ListSection inset={false}>
+            <ListSection inset={false} className="stg26">
               {summary.reminders.map((reminder) => (
                 <ListRow
                   key={reminder.id}

@@ -4,7 +4,6 @@ import { tripService, vehicleService, villageService } from '../../services/fire
 import { createTripEntry } from '../../types';
 import { format } from 'date-fns';
 import {
-  Button,
   Card,
   Chip,
   ListSection,
@@ -18,12 +17,13 @@ import {
   DateField,
   useToast
 } from '../../ui';
-import { TruckIcon, PlusIcon } from '../Common/Icons';
+import useCommitAction from '../Layout/useCommitAction';
+import { TruckIcon } from '../Common/Icons';
 import './AddEntryForm.css';
 
-/* Modelled on Calendar's New Event: an identity header, then meaning-grouped
-   sections, then a pinned action bar. Nothing is a bare label-over-input; every
-   row is an inset grouped row with the value right-aligned. */
+/* Modelled on Calendar's New Event: Cancel and Save in the nav bar, an identity
+   header, then meaning-grouped sections. Nothing is a bare label-over-input;
+   every row is an inset grouped row with the value right-aligned. */
 
 const VEHICLE_TYPES = [
   { value: 'lorry', label: 'Lorry' },
@@ -183,8 +183,10 @@ const AddEntryForm = () => {
     return Object.keys(next).length === 0;
   };
 
+  // Reachable two ways now: the nav bar Save button, and implicit form
+  // submission from the keyboard. Only the latter carries an event.
   const handleSubmit = async (event) => {
-    event.preventDefault();
+    if (event) event.preventDefault();
 
     if (!validate()) {
       toast.error('Check the highlighted fields');
@@ -236,8 +238,24 @@ const AddEntryForm = () => {
     }
   };
 
+  // A new-record form always has something to commit, so the nav bar owns
+  // Cancel / Save for the whole life of the screen — Calendar's New Event.
+  useCommitAction({
+    token: 'add-trip',
+    commitLabel: 'Save',
+    busy: saving,
+    onCommit: handleSubmit,
+    onCancel: () => navigate(-1)
+  });
+
   return (
     <form className="entry" onSubmit={handleSubmit} noValidate>
+      {/* Keeps keyboard submission working now that the visible button lives in
+          the nav bar. Hidden, so it is neither focusable nor announced. */}
+      <button type="submit" hidden>
+        Save Trip
+      </button>
+
       {/* Identity header: what this record is, before any data entry. */}
       <Card className="entry__hero">
         <span className="entry__hero-icon">
@@ -395,21 +413,8 @@ const AddEntryForm = () => {
         </ListRow>
       </ListSection>
 
-      {/* Pinned action bar. iOS 26 puts the primary action in a bottom bar
-          rather than at the end of a long scroll. */}
-      <div className="entry__actions">
-        <Button
-          type="submit"
-          variant="filled"
-          size="lg"
-          block
-          capsule
-          loading={saving}
-          icon={!saving ? <PlusIcon size={19} /> : null}
-        >
-          {saving ? 'Saving…' : 'Save Trip'}
-        </Button>
-      </div>
+      {/* No pinned action bar. Save and Cancel live in the nav bar for as long
+          as this screen is open — see components/Layout/useCommitAction.js. */}
     </form>
   );
 };

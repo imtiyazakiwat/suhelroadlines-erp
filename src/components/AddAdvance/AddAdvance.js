@@ -17,11 +17,13 @@ import {
   Skeleton,
   useToast
 } from '../../ui';
+import useCommitAction from '../Layout/useCommitAction';
 import { WalletIcon, TruckIcon, RupeeIcon } from '../Common/Icons';
 import './AddAdvance.css';
 
 /* Modelled on Apple Cash: the amount is the hero, the source and destination
-   are two rows beneath it, and everything else is secondary. */
+   are two rows beneath it, and everything else is secondary. The commit action
+   sits in the nav bar, so the amount stays the only emphasis on the page. */
 
 const formatDate = (value) => {
   if (!value) return '';
@@ -142,8 +144,10 @@ const AddAdvance = () => {
     return Object.keys(next).length === 0;
   };
 
+  // Reachable from the nav bar Add button and from keyboard submission; only
+  // the latter carries an event.
   const handleSubmit = async (event) => {
-    event.preventDefault();
+    if (event) event.preventDefault();
 
     if (!validate()) {
       toast.error('Check the highlighted fields');
@@ -177,8 +181,26 @@ const AddAdvance = () => {
     }
   };
 
+  /* The amount is already the hero of this screen, so the nav bar button stays
+     the short verb rather than repeating the figure. It stays disabled until
+     there is a trip and a positive amount. */
+  useCommitAction({
+    token: 'add-advance',
+    commitLabel: 'Add',
+    busy: saving,
+    disabled: !selectedTrip || amountValue <= 0,
+    onCommit: handleSubmit,
+    onCancel: () => navigate(-1)
+  });
+
   return (
     <form className="adv" onSubmit={handleSubmit} noValidate>
+      {/* Keeps keyboard submission working now that the visible action is in the
+          nav bar. */}
+      <button type="submit" hidden>
+        Add Advance
+      </button>
+
       {/* Hero: the amount, stated once and large. */}
       <Card className="adv__hero">
         <span className="adv__hero-label">Advance amount</span>
@@ -310,19 +332,7 @@ const AddAdvance = () => {
         </ListRow>
       </ListSection>
 
-      <div className="adv__actions">
-        <Button
-          type="submit"
-          variant="filled"
-          size="lg"
-          block
-          capsule
-          loading={saving}
-          disabled={!selectedTrip || amountValue <= 0}
-        >
-          {saving ? 'Saving…' : amountValue > 0 ? `Add ${formatINR(amountValue)}` : 'Add Advance'}
-        </Button>
-      </div>
+      {/* No pinned action bar. Add and Cancel live in the nav bar. */}
     </form>
   );
 };

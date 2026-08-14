@@ -78,6 +78,37 @@
   opacity: 0;
 }
 
+/* Stacked title + state line, used while an edit session is running. */
+.nav26__titles {
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.05;
+}
+
+.nav26__subtitle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 1px;
+  font: var(--t-caption-2);
+  font-weight: 500;
+  color: var(--label-2);
+  white-space: nowrap;
+}
+
+.nav26__subtitle::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  background: var(--sys-orange);
+  border-radius: 50%;
+}
+
 .nav26__accessory {
   position: relative;
   padding-top: var(--gap-2);

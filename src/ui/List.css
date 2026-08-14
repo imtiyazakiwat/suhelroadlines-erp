@@ -67,8 +67,21 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* iOS highlights the row instantly on touch down, then releases slowly — the
+   asymmetry is what makes a tap feel acknowledged rather than laggy. */
+.lst26__row.is-interactive {
+  transition: background-color var(--dur-base) var(--ease-out);
+}
+
 .lst26__row.is-interactive:active {
-  background: var(--fill-4);
+  background: var(--fill-3);
+  transition-duration: 0ms;
+}
+
+/* The chevron leans into the direction of travel on press. */
+.lst26__row.is-interactive:active .lst26__chevron {
+  transform: translateX(2px);
+  transition: transform var(--dur-fast) var(--spring-snappy);
 }
 
 .lst26__row.is-destructive .lst26__title {

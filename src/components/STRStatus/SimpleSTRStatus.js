@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { tripService } from '../../services/firebaseService';
 import { isStrReceived, formatINR } from '../../services/homeService';
@@ -18,7 +18,9 @@ import {
   Sheet,
   useToast
 } from '../../ui';
-import { DocAlertIcon, DocCheckIcon, CalendarIcon } from '../Common/Icons';
+import useCommitAction from '../Layout/useCommitAction';
+import { isFirebaseAvailable } from '../../firebase/config';
+import { DocAlertIcon, DocCheckIcon, CalendarIcon, ChevronDownIcon } from '../Common/Icons';
 import './SimpleSTRStatus.css';
 
 const STATUS_TABS = [
@@ -61,6 +63,9 @@ const SimpleSTRStatus = () => {
     setSearchParams(next, { replace: true });
   };
 
+  // Last known saved state, so Cancel can restore it without a round trip.
+  const baseline = useRef([]);
+
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
@@ -68,7 +73,9 @@ const SimpleSTRStatus = () => {
       const endDate = new Date(filters.dateTo);
       endDate.setHours(23, 59, 59, 999);
 
-      setTrips(await tripService.getTripsByDateRange(startDate, endDate));
+      const loaded = await tripService.getTripsByDateRange(startDate, endDate);
+      baseline.current = loaded;
+      setTrips(loaded);
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('Could not load trips');
@@ -137,14 +144,41 @@ const SimpleSTRStatus = () => {
 
       const ms = Math.round(performance.now() - startedAt);
       toast.success(`Saved ${edited.length} update${edited.length === 1 ? '' : 's'} in ${ms} ms`);
+      baseline.current = trips;
       setDirtyIds(new Set());
     } catch (error) {
       console.error('Error updating STR status:', error);
-      toast.error('Could not save STR status');
+      // Surface the real reason. The generic message hid the one failure that
+      // actually happens here — Firestore unavailable — which needs a fix in
+      // .env.local, not a retry. Edits stay pending so nothing is lost.
+      toast.error(
+        isFirebaseAvailable
+          ? error?.message || 'Could not save STR status'
+          : 'Not connected to Firebase, so nothing was saved. Your edits are still here.'
+      );
     } finally {
       setSaving(false);
     }
   };
+
+  const discardChanges = () => {
+    setTrips(baseline.current);
+    setDirtyIds(new Set());
+  };
+
+  const pending = dirtyIds.size;
+
+  // Nothing to commit until a row is touched, so the nav bar only takes over
+  // once there are pending edits. Search and notifications come back on save.
+  useCommitAction({
+    token: 'str-status',
+    active: pending > 0,
+    status: `${pending} unsaved`,
+    commitLabel: 'Save',
+    busy: saving,
+    onCommit: saveChanges,
+    onCancel: discardChanges
+  });
 
   const resetFilters = () => {
     setFilters({
@@ -172,11 +206,31 @@ const SimpleSTRStatus = () => {
           ariaLabel="STR status"
         />
 
-        <button type="button" className="str__range" onClick={() => setFilterSheet(true)}>
+        <button
+          type="button"
+          className="str__range"
+          onClick={() => setFilterSheet(true)}
+          aria-haspopup="dialog"
+          aria-expanded={filterSheet}
+          aria-label={`Date range, ${rangeLabel}. Change`}
+        >
           <CalendarIcon size={15} />
           <span>{rangeLabel}</span>
+          <ChevronDownIcon size={13} className="str__range-chevron" />
         </button>
       </div>
+
+      {!isFirebaseAvailable && (
+        <div className="str__offline" role="status">
+          <span className="str__offline-icon" aria-hidden="true">
+            <DocAlertIcon size={17} />
+          </span>
+          <span>
+            <strong>Working from local sample data.</strong> Firebase config was not picked up, so
+            STR changes cannot be saved. Restart the dev server so it reads <code>.env.local</code>.
+          </span>
+        </div>
+      )}
 
       {counts.due > 0 && (
         <Card className="str__summary">
@@ -212,7 +266,9 @@ const SimpleSTRStatus = () => {
       ) : (
         <ListSection
           header={`${visibleTrips.length} trip${visibleTrips.length === 1 ? '' : 's'}`}
-          footer="Tap a row to flip its STR status. Changes save together."
+          footer="Tap a row to flip its STR status, then Save at the top right. Changes save together."
+          className="stg26"
+          key={statusFilter}
         >
           {visibleTrips.map((trip) => {
             const received = isStrReceived(trip);
@@ -240,23 +296,8 @@ const SimpleSTRStatus = () => {
         </ListSection>
       )}
 
-      {/* Save bar floats above the tab dock only while there is something to save */}
-      {dirtyIds.size > 0 && (
-        <div className="str__savebar">
-          <Button
-            variant="filled"
-            size="lg"
-            block
-            capsule
-            loading={saving}
-            onClick={saveChanges}
-          >
-            {saving
-              ? 'Saving…'
-              : `Save ${dirtyIds.size} change${dirtyIds.size === 1 ? '' : 's'}`}
-          </Button>
-        </div>
-      )}
+      {/* No bottom action bar. Save and Cancel live in the nav bar for the
+          duration of the edit session — see components/Layout/editSession.js. */}
 
       <Sheet
         open={filterSheet}

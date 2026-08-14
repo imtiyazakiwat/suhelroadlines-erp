@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { NavBar, NavButton, NavSearchButton, BackButton, TabBar, DockButton } from '../../ui/chrome';
+import Button from '../../ui/Button';
+import { RouteTransition } from '../../ui/motion';
+import { EditSessionContext } from './editSession';
 import SearchOverlay from '../Common/SearchOverlay';
 import NotificationsSheet from '../Common/NotificationsSheet';
 import { tripService } from '../../services/firebaseService';
@@ -20,7 +23,7 @@ const TITLES = {
   '/add-entry': 'Add Trip',
   '/add-advance': 'Add Advance',
   '/reports': 'Reports',
-  '/str-status': 'Paid STR',
+  '/str-status': 'STR Status',
   '/settings': 'Settings'
 };
 
@@ -38,6 +41,14 @@ const AppLayout = ({ children }) => {
   const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [dueCount, setDueCount] = useState(0);
+
+  // A screen with pending edits hands its Cancel / commit pair to the nav bar
+  // rather than growing an action bar over its own content.
+  const [editSession, setEditSession] = useState(null);
+  // setState from useState is referentially stable, so the context value never
+  // changes and consumers don't re-render on unrelated layout state.
+  const editCtx = React.useMemo(() => setEditSession, []);
+  const editing = Boolean(editSession);
 
   const path = location.pathname;
   const isHome = path === '/';
@@ -65,10 +76,15 @@ const AppLayout = ({ children }) => {
     <div className="app-shell">
       <NavBar
         title={TITLES[path] || 'Suhel Roadlines'}
-        largeTitle={isHome}
+        subtitle={editSession?.status || null}
+        largeTitle={isHome && !editing}
         transparent
         leading={
-          isTabRoot ? (
+          editing ? (
+            <Button variant="plain" size="sm" onClick={editSession.onCancel}>
+              {editSession.cancelLabel || 'Cancel'}
+            </Button>
+          ) : isTabRoot ? (
             isHome ? (
               <span className="brand-avatar" aria-hidden="true">
                 SR
@@ -79,21 +95,38 @@ const AppLayout = ({ children }) => {
           )
         }
         trailing={
-          <>
-            <NavSearchButton placeholder="Search trips" onClick={() => setSearchOpen(true)} />
-            <NavButton
-              label={dueCount > 0 ? `Notifications, ${dueCount} pending` : 'Notifications'}
-              badge={dueCount > 0}
-              onClick={() => setNotificationsOpen(true)}
+          editing ? (
+            /* Search and notifications step aside: while an edit session is
+               open the only trailing action is the one that commits it. */
+            <Button
+              variant="filled"
+              size="sm"
+              capsule
+              loading={editSession.busy}
+              disabled={editSession.disabled}
+              onClick={editSession.onCommit}
             >
-              <BellIcon size={21} />
-            </NavButton>
-          </>
+              {editSession.commitLabel || 'Save'}
+            </Button>
+          ) : (
+            <>
+              <NavSearchButton placeholder="Search trips" onClick={() => setSearchOpen(true)} />
+              <NavButton
+                label={dueCount > 0 ? `Notifications, ${dueCount} pending` : 'Notifications'}
+                badge={dueCount > 0}
+                onClick={() => setNotificationsOpen(true)}
+              >
+                <BellIcon size={21} />
+              </NavButton>
+            </>
+          )
         }
       />
 
-      <main className="app-content" key={path}>
-        {children}
+      <main className="app-content">
+        <EditSessionContext.Provider value={editCtx}>
+          <RouteTransition>{children}</RouteTransition>
+        </EditSessionContext.Provider>
       </main>
 
       <TabBar

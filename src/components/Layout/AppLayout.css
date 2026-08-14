@@ -53,12 +53,9 @@
   min-height: 0;
   /* clear the floating capsule: its height + inset + safe area + breathing room */
   padding-bottom: calc(var(--tabbar-h) + var(--tabbar-inset) + var(--safe-b) + 28px);
-  animation: app-fade var(--dur-base) var(--ease-out) both;
-}
-
-@keyframes app-fade {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  /* Route transitions live in RouteTransition; a blanket fade here would
+     double up with them. Clipping keeps the outgoing layer off-screen. */
+  overflow-x: clip;
 }
 
 /* Brand monogram in the nav bar */

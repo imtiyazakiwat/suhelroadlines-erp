@@ -34,4 +34,6 @@ export { default as useOverlay } from './overlay/useOverlay';
 export { default as NavBar, NavButton, NavSearchButton, BackButton, useScrolled } from './chrome/NavBar';
 export { default as TabBar, DockButton } from './chrome/TabBar';
 
+export { RouteTransition, Stagger, Appear } from './motion';
+
 export { GlassSurface, detectGlassTier } from './glass';

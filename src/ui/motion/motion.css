@@ -1,0 +1,274 @@
+/* =============================================================================
+   Motion.
+
+   Apple's guidance, and what each rule here implements:
+
+   - Springs, not duration curves. Elements settle with a slight rebound so they
+     read as physical objects ("Animate with springs", WWDC23). The bezier
+     approximations below are fitted to UIKit's default springs.
+   - Continuity. A push keeps the outgoing view on screen, sliding and dimming
+     it, so the new view arrives *from* somewhere rather than replacing nothing
+     ("Enhance your UI animations and transitions", WWDC24).
+   - Direction carries meaning. Push moves general -> specific; pop reverses it
+     exactly, so going back undoes what going forward did.
+   - Interruptible. Nothing blocks input while animating.
+   - Reduced Motion replaces travel with a cross-fade, keeping the feedback but
+     dropping the movement — Apple's criteria ask for a calmer equivalent, not
+     for no animation at all.
+   ========================================================================== */
+
+:root {
+  /* iOS spring approximations. Snappy for controls, smooth for surfaces,
+     bouncy only for playful confirmations. */
+  --spring-snappy: cubic-bezier(0.22, 1, 0.36, 1);
+  --spring-smooth: cubic-bezier(0.32, 0.72, 0, 1);
+  --spring-bouncy: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* UIKit's push/pop is ~0.35-0.5s; 420ms matches the perceived weight. */
+  --dur-route: 420ms;
+  --dur-stagger-step: 34ms;
+}
+
+/* ============================== route transitions ======================== */
+
+.rt26 {
+  position: relative;
+  isolation: isolate;
+}
+
+.rt26__layer {
+  /* Layers only overlap while a transition runs. */
+  min-height: 100%;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
+/* The outgoing layer is taken out of flow so the incoming one holds the
+   scroll position, and it must never swallow taps. */
+.rt26__layer--exiting {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.rt26__layer--entering {
+  position: relative;
+  z-index: 1;
+}
+
+/* --- push: general -> specific ------------------------------------------- */
+
+.rt26--push .rt26__layer--entering {
+  animation: rt26-push-in var(--dur-route) var(--spring-smooth) both;
+}
+
+.rt26--push .rt26__layer--exiting {
+  animation: rt26-push-out var(--dur-route) var(--spring-smooth) both;
+}
+
+@keyframes rt26-push-in {
+  from {
+    transform: translate3d(100%, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* Parallax: the outgoing view travels a third of the distance and dims,
+   which is what makes the new view feel like it sits on top of it. */
+@keyframes rt26-push-out {
+  from {
+    transform: translate3d(0, 0, 0);
+    filter: brightness(1);
+    opacity: 1;
+  }
+  to {
+    transform: translate3d(-32%, 0, 0);
+    filter: brightness(0.92);
+    opacity: 0.6;
+  }
+}
+
+/* --- pop: the exact inverse --------------------------------------------- */
+
+.rt26--pop .rt26__layer--entering {
+  animation: rt26-pop-in var(--dur-route) var(--spring-smooth) both;
+}
+
+.rt26--pop .rt26__layer--exiting {
+  animation: rt26-pop-out var(--dur-route) var(--spring-smooth) both;
+}
+
+@keyframes rt26-pop-in {
+  from {
+    transform: translate3d(-32%, 0, 0);
+    filter: brightness(0.92);
+    opacity: 0.6;
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+    filter: brightness(1);
+    opacity: 1;
+  }
+}
+
+@keyframes rt26-pop-out {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(100%, 0, 0);
+  }
+}
+
+/* --- switch: sibling tabs, no hierarchy, so no travel -------------------- */
+
+.rt26--switch .rt26__layer--entering {
+  animation: rt26-switch-in var(--dur-base) var(--spring-snappy) both;
+}
+
+.rt26--switch .rt26__layer--exiting {
+  animation: rt26-switch-out var(--dur-fast) var(--ease-out) both;
+}
+
+@keyframes rt26-switch-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985) translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes rt26-switch-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* ================================= stagger =============================== */
+
+/* Rows arrive in sequence so the eye can follow the list forming.
+
+   Two selectors: direct children for plain containers, and rows inside a
+   ListSection's card, since that card sits between the section and its rows.
+   Delay comes from nth-child so nothing has to be injected per item, and it
+   stops climbing after the 8th row — beyond that a stagger reads as lag. */
+.stg26 > *,
+.stg26 .lst26__card > * {
+  animation: rt26-rise var(--dur-base) var(--spring-snappy) both;
+  animation-delay: 0ms;
+}
+
+.stg26 > *:nth-child(2),
+.stg26 .lst26__card > *:nth-child(2) { animation-delay: calc(1 * var(--dur-stagger-step)); }
+.stg26 > *:nth-child(3),
+.stg26 .lst26__card > *:nth-child(3) { animation-delay: calc(2 * var(--dur-stagger-step)); }
+.stg26 > *:nth-child(4),
+.stg26 .lst26__card > *:nth-child(4) { animation-delay: calc(3 * var(--dur-stagger-step)); }
+.stg26 > *:nth-child(5),
+.stg26 .lst26__card > *:nth-child(5) { animation-delay: calc(4 * var(--dur-stagger-step)); }
+.stg26 > *:nth-child(6),
+.stg26 .lst26__card > *:nth-child(6) { animation-delay: calc(5 * var(--dur-stagger-step)); }
+.stg26 > *:nth-child(7),
+.stg26 .lst26__card > *:nth-child(7) { animation-delay: calc(6 * var(--dur-stagger-step)); }
+.stg26 > *:nth-child(n + 8),
+.stg26 .lst26__card > *:nth-child(n + 8) { animation-delay: calc(7 * var(--dur-stagger-step)); }
+
+/* An explicit --i still wins, for containers that set it. */
+.stg26 > [style*='--i'] {
+  animation-delay: calc(min(var(--i, 0), 8) * var(--dur-stagger-step));
+}
+
+@keyframes rt26-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ============================ micro-interactions ========================= */
+
+/* Content that arrives after a fetch shouldn't pop in abruptly. */
+.appear26 {
+  animation: rt26-appear var(--dur-base) var(--spring-snappy) both;
+}
+
+@keyframes rt26-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* A value that just changed gets a single soft pulse, so updates are noticed
+   without the layout moving. */
+.pulse26 {
+  animation: rt26-pulse 520ms var(--spring-bouncy) both;
+}
+
+@keyframes rt26-pulse {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* =============================== accessibility =========================== */
+
+@media (prefers-reduced-motion: reduce) {
+  /* Keep the transition, drop the travel. */
+  .rt26--push .rt26__layer--entering,
+  .rt26--pop .rt26__layer--entering,
+  .rt26--switch .rt26__layer--entering {
+    animation: rt26-fade var(--dur-fast) linear both;
+  }
+
+  .rt26--push .rt26__layer--exiting,
+  .rt26--pop .rt26__layer--exiting,
+  .rt26--switch .rt26__layer--exiting {
+    animation: rt26-switch-out var(--dur-fast) linear both;
+  }
+
+  .stg26 > *,
+  .stg26 .lst26__card > *,
+  .stg26 > [style*='--i'] {
+    animation: rt26-fade var(--dur-fast) linear both;
+    animation-delay: 0ms !important;
+  }
+
+  .appear26,
+  .pulse26 {
+    animation: rt26-fade var(--dur-fast) linear both;
+  }
+}
+
+@keyframes rt26-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
