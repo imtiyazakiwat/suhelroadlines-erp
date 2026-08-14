@@ -112,16 +112,31 @@ const outboxPromoters = {
     setDoc(doc(db, COLLECTIONS.VILLAGES, id), entry.data, { merge: true })
 };
 
+/**
+ * Promote anything stranded in the RTDB outbox to Firestore.
+ *
+ * Exported because a once-per-start retry is not enough for an installed app:
+ * a standalone web app is suspended and resumed rather than reloaded, so a
+ * write that failed offline would sit in the outbox for the rest of the app's
+ * life. `PWABridge` calls this again when connectivity returns and when the app
+ * comes back to the foreground.
+ */
+export const retryOutbox = async () => {
+  if (!isFirebaseAvailable || !db) return { flushed: 0, failed: 0 };
+  try {
+    const result = await fastSync.flushOutbox(outboxPromoters);
+    if (result.flushed || result.failed) {
+      console.log(`fastSync outbox: ${result.flushed} promoted, ${result.failed} pending`);
+    }
+    return result;
+  } catch (e) {
+    return { flushed: 0, failed: 0 };
+  }
+};
+
 if (isFirebaseAvailable && db) {
   // Deferred so it never competes with first paint.
-  setTimeout(() => {
-    fastSync
-      .flushOutbox(outboxPromoters)
-      .then(({ flushed, failed }) => {
-        if (flushed || failed) console.log(`fastSync outbox: ${flushed} promoted, ${failed} pending`);
-      })
-      .catch(() => {});
-  }, 1500);
+  setTimeout(retryOutbox, 1500);
 }
 
 // Trip Services

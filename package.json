@@ -25,6 +25,7 @@
     "start": "react-scripts start",
     "build": "DISABLE_ESLINT_PLUGIN=true react-scripts build",
     "build:ci": "CI=false DISABLE_ESLINT_PLUGIN=true react-scripts build",
+    "brand": "node scripts/generate-brand-assets.js",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },

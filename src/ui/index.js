@@ -38,3 +38,4 @@ export { default as TabBar, DockButton } from './chrome/TabBar';
 export { RouteTransition, Stagger, Appear } from './motion';
 
 export { GlassSurface, detectGlassTier } from './glass';
+export { default as AppMark } from './brand/AppMark';

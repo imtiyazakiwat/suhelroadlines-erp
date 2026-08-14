@@ -24,13 +24,39 @@ h6 {
   margin: 0;
 }
 
+/* Declaring both appearances is what lets the UA draw form controls, scrollbars
+   and — critically for an installed app — the canvas behind rubber-band
+   overscroll in the right appearance. Without it those default to light. */
+html {
+  color-scheme: light dark;
+}
+
 html,
 body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: #F2F4F7;
+  /* Was a hardcoded #F2F4F7. In a dark standalone window that colour is what
+     appears when the content is dragged past its end — a bright band at the top
+     of a black app. `light-dark()` keeps this correct without waiting for
+     ios26.css, which loads later. */
+  background: light-dark(#F2F2F7, #000000);
   overflow-x: hidden;
+}
+
+/* Fallback for engines without light-dark(). Same two values. */
+@supports not (color: light-dark(#000, #fff)) {
+  html,
+  body {
+    background: #F2F2F7;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    html,
+    body {
+      background: #000000;
+    }
+  }
 }
 
 body {
@@ -44,7 +70,51 @@ body {
 
 #root {
   height: 100%;
-  background: #F2F4F7;
+  background: light-dark(#F2F2F7, #000000);
+}
+
+@supports not (color: light-dark(#000, #fff)) {
+  #root {
+    background: #F2F2F7;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    #root {
+      background: #000000;
+    }
+  }
+}
+
+/* ------------------------------------------------- installed (standalone) app
+   `.is-standalone` is set by PWABridge from (display-mode: standalone) and
+   navigator.standalone. These rules apply ONLY when installed, because each of
+   them removes something the browser would otherwise provide.
+
+   Text selection: in a browser, selecting label text is normal and harmless. In
+   an installed app a long-press that produces a selection handle and a Copy
+   callout over a list row is a tell that this is a web view — native rows do not
+   do it. Inputs are excluded below, and this is scoped to standalone so the
+   in-browser experience keeps normal selection. */
+.is-standalone body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.is-standalone input,
+.is-standalone textarea,
+.is-standalone [contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+/* No pull-to-refresh and no horizontal rubber band in an installed app: there is
+   no address bar to reveal, and the gesture only ever fires by accident while
+   scrolling a list. `contain` (not `none`) still allows scrolling — it just stops
+   the overscroll being chained to the document. */
+.is-standalone body {
+  overscroll-behavior: contain;
 }
 
 code {

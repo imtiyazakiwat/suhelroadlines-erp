@@ -58,19 +58,14 @@
   overflow-x: clip;
 }
 
-/* Brand monogram in the nav bar */
+/* Brand mark in the nav bar.
+
+   The plate and its gradient now come from AppMark's own SVG (one definition
+   shared with the Home Screen icon), so this rule only positions it and keeps
+   the double ring that lifts it off the warm wash. */
 .brand-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
+  display: block;
   flex-shrink: 0;
-  font: var(--t-caption-1);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: #fff;
-  background: var(--brand-gradient);
   border-radius: 50%;
   box-shadow: 0 0 0 2px var(--bg-grouped-secondary), 0 0 0 3.5px rgba(12, 42, 91, 0.12);
 }

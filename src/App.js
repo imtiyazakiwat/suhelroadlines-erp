@@ -10,6 +10,7 @@ import SimpleSettings from './components/Settings/SimpleSettings';
 import VehiclesPage from './components/Settings/VehiclesPage';
 import VillagesPage from './components/Settings/VillagesPage';
 import SimpleSTRStatus from './components/STRStatus/SimpleSTRStatus';
+import PWABridge from './components/Common/PWABridge';
 import { ToastProvider } from './ui';
 
 // Single token layer. The legacy sheet that used to load ahead of this one is
@@ -20,6 +21,11 @@ import './styles/ios26.css';
 function App() {
   return (
     <ToastProvider>
+      {/* Standalone-mode behaviour: display-mode + connectivity classes, outbox
+          retry on reconnect/resume, and the service worker update prompt. Inside
+          ToastProvider because it needs to talk to the user; outside Router
+          because none of it is per-route. Renders nothing. */}
+      <PWABridge />
       <Router>
         <AppLayout>
           <Routes>

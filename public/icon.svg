@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+  <linearGradient id="i-plate" gradientUnits="userSpaceOnUse"
+    x1="327.68" y1="0" x2="696.32" y2="1024">
+    <stop offset="0" stop-color="#1E4E8C"/>
+    <stop offset="1" stop-color="#0A2450"/>
+  </linearGradient>
+  <linearGradient id="i-sun" gradientUnits="userSpaceOnUse"
+    x1="268" y1="148" x2="268" y2="316">
+    <stop offset="0" stop-color="#FFC163"/>
+    <stop offset="1" stop-color="#FF9500"/>
+  </linearGradient>
+  <radialGradient id="i-sheen" gradientUnits="userSpaceOnUse"
+    cx="512" cy="20" r="800">
+    <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.14"/>
+    <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+  </radialGradient></defs>
+  <rect width="1024" height="1024" fill="url(#i-plate)"/>
+       <rect width="1024" height="1024" fill="url(#i-sheen)"/>
+  <g transform="translate(512 512) scale(1) translate(-512 -512)">
+    
+  <circle cx="268" cy="232" r="84" fill="url(#i-sun)"/>
+  <path d="M244 806 C244 590 470 600 548 500 C626 400 782 424 782 232" fill="none" stroke="#FFFFFF"
+        stroke-width="112" stroke-linecap="round"/>
+  <path d="M244 806 C244 590 470 600 548 500 C626 400 782 424 782 232" fill="none" stroke="url(#i-plate)"
+        stroke-width="15.12" stroke-dasharray="16 96" stroke-linecap="butt"/>
+  </g>
+</svg>

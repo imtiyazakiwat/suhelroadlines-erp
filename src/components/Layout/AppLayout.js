@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { NavBar, NavButton, NavSearchButton, BackButton, TabBar, DockButton } from '../../ui/chrome';
 import Button from '../../ui/Button';
+import AppMark from '../../ui/brand/AppMark';
 import { RouteTransition } from '../../ui/motion';
 import { EditSessionContext } from './editSession';
 import SearchOverlay from '../Common/SearchOverlay';
@@ -88,9 +89,12 @@ const AppLayout = ({ children }) => {
             </Button>
           ) : isTabRoot ? (
             isHome ? (
-              <span className="brand-avatar" aria-hidden="true">
-                SR
-              </span>
+              /* The real brand mark, same geometry as the Home Screen icon
+                 (src/brand/artwork.js). This was a text "SR" monogram while the
+                 installed icon was React's logo — two identities, neither the
+                 app's own. Decorative: the nav title already says the name, so a
+                 label here would make VoiceOver read it twice. */
+              <AppMark size={34} className="brand-avatar" />
             ) : null
           ) : (
             <BackButton onClick={() => navigate(-1)} />

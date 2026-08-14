@@ -42,10 +42,14 @@ export const ToastProvider = ({ children }) => {
 
   const toast = useCallback(
     (message, options = {}) => {
-      const { tone = 'info', duration = 2600 } = typeof options === 'string' ? { tone: options } : options;
+      // `action` is an optional { label, onClick }. It exists so a toast can be
+      // actionable rather than merely informative — "a new version is ready"
+      // with nothing to tap is a notice the user cannot act on.
+      const { tone = 'info', duration = 2600, action = null } =
+        typeof options === 'string' ? { tone: options } : options;
       const id = (seq += 1);
 
-      setToasts((current) => [...current.slice(-2), { id, message, tone }]);
+      setToasts((current) => [...current.slice(-2), { id, message, tone, action }]);
       timers.current.set(
         id,
         setTimeout(() => dismiss(id), duration)
@@ -81,6 +85,22 @@ export const ToastProvider = ({ children }) => {
               >
                 {TONE_ICON[item.tone] && <span className="tst26__icon">{TONE_ICON[item.tone]}</span>}
                 <span className="tst26__text">{item.message}</span>
+                {item.action && (
+                  <button
+                    type="button"
+                    className="tst26__action"
+                    onClick={(event) => {
+                      // The capsule itself dismisses on click, so the action must
+                      // not let the event reach it — otherwise the toast vanishes
+                      // and the handler's own reload races the unmount.
+                      event.stopPropagation();
+                      dismiss(item.id);
+                      item.action.onClick?.();
+                    }}
+                  >
+                    {item.action.label}
+                  </button>
+                )}
               </GlassSurface>
             ))}
           </div>,

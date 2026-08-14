@@ -364,3 +364,31 @@
   font-weight: 500;
   color: var(--label-1);
 }
+
+/* Optional trailing action. Separated by a hairline the way iOS separates a
+   notification's action from its text, and given a negative-inset hit area so
+   the tap target clears 44px without inflating the capsule. */
+.tst26__action {
+  position: relative;
+  flex-shrink: 0;
+  margin-left: var(--gap-1);
+  padding: 0 0 0 var(--gap-2);
+  font: var(--t-subhead);
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: none;
+  border-left: 0.5px solid var(--separator);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tst26__action::after {
+  content: '';
+  position: absolute;
+  inset: -12px -8px;
+}
+
+.tst26__action:active {
+  opacity: var(--press-opacity);
+}
