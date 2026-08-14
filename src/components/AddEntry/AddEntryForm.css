@@ -1,294 +1,93 @@
-/* Add Trip — iOS grouped form */
+/* Add Trip. Layout only — every element comes from src/ui. */
 
-.add-entry-form {
-  max-width: 560px;
-  margin: 0 auto;
-  padding: 8px var(--content-pad) 0;
+.entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-5);
+  padding-top: var(--gap-2);
+  /* room for the pinned action bar plus the floating tab dock */
+  padding-bottom: calc(var(--control-h-lg) + var(--gap-5));
 }
 
-.form-header {
-  padding: 4px 2px 14px;
-  background: none;
-  border: none;
-  box-shadow: none;
-  text-align: left;
-}
+/* ------------------------------------------------------------------- hero */
 
-.form-title {
-  margin: 0 0 2px;
-  font-size: var(--text-title1);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  color: var(--label);
-}
-
-.form-subtitle {
-  margin: 0;
-  font-size: var(--text-footnote);
-  color: var(--label-secondary);
-}
-
-.entry-form {
-  padding: 16px;
-  background: var(--bg-elevated);
-  border: none;
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-md);
-}
-
-.form-group {
-  margin-bottom: var(--space-4);
-}
-
-.form-label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: var(--text-footnote);
-  font-weight: var(--font-semibold);
-  color: var(--label-secondary);
-}
-
-/* .form-input / :focus / .error live in the design system so every screen
-   shares one input treatment. No focus transform: it caused caret jitter. */
-
-/* ------------------------------- SL number ------------------------------- */
-
-.sl-number-container {
-  position: relative;
+.entry__hero {
   display: flex;
   align-items: center;
+  gap: var(--gap-3);
 }
 
-.sl-number-input {
-  flex: 1;
-  padding-right: 86px;
-}
-
-.auto-btn {
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 34px;
-  padding: 0 10px;
-  font-family: inherit;
-  font-size: var(--text-caption);
-  font-weight: var(--font-semibold);
-  color: var(--tint);
-  background: var(--info-bg);
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-
-.auto-btn:active {
-  transform: translateY(-50%) scale(0.95);
-}
-
-.sl-number-help {
-  margin-top: 5px;
-  font-size: var(--text-caption);
-  color: var(--label-tertiary);
-}
-
-/* ------------------------------ Search field ------------------------------ */
-
-.search-container {
-  position: relative;
-}
-
-.search-input {
-  padding-right: 44px;
-}
-
-.search-icon {
-  position: absolute;
-  right: 14px;
-  top: 23px;
-  transform: translateY(-50%);
-  width: 18px;
-  height: 18px;
-  color: var(--label-quaternary);
-  pointer-events: none;
-}
-
-.add-button {
-  position: absolute;
-  right: 6px;
-  top: 23px;
-  transform: translateY(-50%);
+.entry__hero-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
   color: #fff;
-  background: var(--navy);
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
+  background: var(--brand-gradient);
+  border-radius: var(--r-md);
+  box-shadow: 0 6px 16px rgba(12, 42, 91, 0.22);
 }
 
-.add-button:active:not(:disabled) {
-  transform: translateY(-50%) scale(0.94);
+.entry__hero-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
-.add-button:disabled {
-  color: var(--label-quaternary);
-  background: var(--fill-tertiary);
-  cursor: not-allowed;
+.entry__hero-title {
+  font: var(--t-title-3);
+  letter-spacing: var(--track-title-2);
+  font-variant-numeric: tabular-nums;
+  color: var(--label-1);
 }
 
-/* -------------------------------- Dropdown -------------------------------- */
-
-.dropdown {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  z-index: var(--z-dropdown);
-  max-height: 244px;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  background: var(--bg-elevated);
-  border: 1px solid var(--separator);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-}
-
-.dropdown-item {
-  padding: 10px var(--space-4);
-  cursor: pointer;
-  border-bottom: 1px solid var(--separator);
-  transition: background-color var(--transition-fast);
-}
-
-.dropdown-item:last-child {
-  border-bottom: none;
-}
-
-.dropdown-item:active:not(.disabled) {
-  background: var(--info-bg);
-}
-
-.dropdown-item.disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.dropdown-item.new-item .dropdown-primary {
-  color: var(--tint);
-}
-
-.dropdown-primary {
-  font-size: var(--text-subhead);
-  font-weight: var(--font-semibold);
-  color: var(--label);
-}
-
-.dropdown-secondary {
+.entry__hero-sub {
   margin-top: 1px;
-  font-size: var(--text-caption);
-  color: var(--label-tertiary);
+  font: var(--t-footnote);
+  color: var(--label-2);
 }
 
-/* -------------------------------- Villages -------------------------------- */
+/* ------------------------------------------------------------------- rows */
 
-.selected-villages {
+/* A segmented control inside a row sits hard against the trailing edge and
+   takes only the space it needs. */
+.entry__segmented {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 62%;
+  margin-left: auto;
+}
+
+.entry__chips-row,
+.entry__add-row {
+  padding-top: var(--gap-2);
+  padding-bottom: var(--gap-2);
+}
+
+.entry__chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: var(--gap-2);
+  width: 100%;
 }
 
-.village-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 6px 0 12px;
-  font-size: var(--text-footnote);
-  font-weight: var(--font-medium);
-  color: var(--navy);
-  background: var(--navy-050);
-  border-radius: var(--radius-full);
+/* ---------------------------------------------------------------- actions */
+
+.entry__actions {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--tabbar-h) + var(--tabbar-inset) + var(--safe-b) + var(--gap-3));
+  z-index: var(--z-fab);
+  padding: 0 var(--gutter);
 }
 
-.remove-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  color: var(--navy);
-  background: rgba(12, 42, 91, 0.1);
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-.remove-chip:active {
-  background: rgba(12, 42, 91, 0.22);
-}
-
-.remove-chip .icon-sm {
-  width: 13px;
-  height: 13px;
-}
-
-/* ------------------------------ Form actions ------------------------------ */
-
-.form-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: var(--space-5);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--separator);
-}
-
-.form-actions .btn {
-  flex: 1;
-  min-height: 48px;
-  border-radius: var(--radius-lg);
-}
-
-.form-actions .btn-secondary {
-  flex: 0.75;
-}
-
-.form-actions .btn-primary {
-  flex: 1.25;
-}
-
-.loading {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-@media (max-width: 380px) {
-  .entry-form {
-    padding: 14px;
-  }
-
-  .form-actions {
-    flex-direction: column;
-  }
-
-  .form-actions .btn,
-  .form-actions .btn-secondary,
-  .form-actions .btn-primary {
-    flex: none;
+@media (min-width: 620px) {
+  .entry,
+  .entry__actions {
+    max-width: 560px;
+    margin: 0 auto;
   }
 }

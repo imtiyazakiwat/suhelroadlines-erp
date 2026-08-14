@@ -1,13 +1,45 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { tripService, vehicleService, villageService } from '../../services/firebaseService';
 import { createTripEntry } from '../../types';
 import { format } from 'date-fns';
-import Toast from '../Common/Toast';
+import {
+  Button,
+  Card,
+  Chip,
+  ListSection,
+  ListRow,
+  Picker,
+  Segmented,
+  TextField,
+  PhoneField,
+  CurrencyField,
+  NumberField,
+  DateField,
+  useToast
+} from '../../ui';
+import { TruckIcon, PlusIcon } from '../Common/Icons';
 import './AddEntryForm.css';
+
+/* Modelled on Calendar's New Event: an identity header, then meaning-grouped
+   sections, then a pinned action bar. Nothing is a bare label-over-input; every
+   row is an inset grouped row with the value right-aligned. */
+
+const VEHICLE_TYPES = [
+  { value: 'lorry', label: 'Lorry' },
+  { value: 'tempo', label: 'Tempo' },
+  { value: 'pickup', label: 'Pickup' }
+];
+
+const STR_OPTIONS = [
+  { value: 'not received', label: 'Due' },
+  { value: 'Received', label: 'Received' }
+];
 
 const AddEntryForm = () => {
   const navigate = useNavigate();
+  const toast = useToast();
+
   const [formData, setFormData] = useState({
     slNumber: '',
     date: format(new Date(), 'yyyy-MM-dd'),
@@ -20,262 +52,151 @@ const AddEntryForm = () => {
     mobileNumber: '',
     advanceAmount: ''
   });
-  
+
   const [vehicles, setVehicles] = useState([]);
   const [allVillages, setAllVillages] = useState([]);
-  const [filteredVehicles, setFilteredVehicles] = useState([]);
-  const [filteredVillages, setFilteredVillages] = useState([]);
-  const [showVehicleDropdown, setShowVehicleDropdown] = useState(false);
-  const [showVillageDropdown, setShowVillageDropdown] = useState(false);
-  const [villageSearchQuery, setVillageSearchQuery] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
-  const [toastMessage, setToastMessage] = useState('');
-  const [showToast, setShowToast] = useState(false);
-  
-  // Refs for cleanup
-  const toastTimeoutRef = useRef(null);
-  const navigationTimeoutRef = useRef(null);
-
-  // Refs for outside-tap dismissal of the two autocomplete panels
-  const vehicleFieldRef = useRef(null);
-  const villageFieldRef = useRef(null);
 
   useEffect(() => {
-    initializeForm();
-    loadVehicles();
-    loadVillages();
-  }, []);
+    let cancelled = false;
 
-  // Close a dropdown when the user taps anywhere outside its field.
-  // Without this the panels stayed open and covered the fields below.
-  useEffect(() => {
-    const handlePointerDown = (event) => {
-      if (vehicleFieldRef.current && !vehicleFieldRef.current.contains(event.target)) {
-        setShowVehicleDropdown(false);
-      }
-      if (villageFieldRef.current && !villageFieldRef.current.contains(event.target)) {
-        setShowVillageDropdown(false);
-      }
-    };
+    tripService
+      .getNextSlNumber()
+      .then((next) => {
+        if (!cancelled) {
+          setFormData((prev) =>
+            // Never clobber a number the user has already typed.
+            prev.slNumber ? prev : { ...prev, slNumber: String(next).padStart(4, '0') }
+          );
+        }
+      })
+      .catch((error) => console.error('Error getting next SL number:', error));
 
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('touchstart', handlePointerDown, { passive: true });
+    vehicleService
+      .getAllVehicles()
+      .then((list) => !cancelled && setVehicles(list || []))
+      .catch((error) => console.error('Error loading vehicles:', error));
+
+    villageService
+      .getAllVillages()
+      .then((list) => !cancelled && setAllVillages(list || []))
+      .catch((error) => console.error('Error loading villages:', error));
+
     return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('touchstart', handlePointerDown);
+      cancelled = true;
     };
   }, []);
 
-  // Cleanup timeouts on unmount
-  useEffect(() => {
-    return () => {
-      if (toastTimeoutRef.current) {
-        clearTimeout(toastTimeoutRef.current);
-      }
-      if (navigationTimeoutRef.current) {
-        clearTimeout(navigationTimeoutRef.current);
-      }
-    };
+  const setField = useCallback((field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    setErrors((prev) => (prev[field] ? { ...prev, [field]: null } : prev));
   }, []);
 
-  const initializeForm = async () => {
-    try {
-      const nextSlNumber = await tripService.getNextSlNumber();
-      setFormData(prev => ({
-        ...prev,
-        slNumber: nextSlNumber.toString().padStart(4, '0')
-      }));
-    } catch (error) {
-      console.error('Error getting next SL number:', error);
-    }
-  };
+  const vehicleOptions = useMemo(
+    () =>
+      vehicles.map((vehicle) => ({
+        value: vehicle.vehicleNumber,
+        label: vehicle.vehicleNumber,
+        subtitle: [vehicle.driverName, vehicle.mobileNumber].filter(Boolean).join(' · ')
+      })),
+    [vehicles]
+  );
 
-  const loadVehicles = async () => {
-    try {
-      const vehicleList = await vehicleService.getAllVehicles();
-      setVehicles(vehicleList);
-      setFilteredVehicles(vehicleList);
-    } catch (error) {
-      console.error('Error loading vehicles:', error);
-    }
-  };
+  const villageOptions = useMemo(
+    () =>
+      allVillages.map((village) => ({
+        value: village.villageName,
+        label: village.villageName,
+        subtitle: `Used ${village.usageCount || 0} times`
+      })),
+    [allVillages]
+  );
 
-  const loadVillages = async () => {
-    try {
-      const villageList = await villageService.getAllVillages();
-      setAllVillages(villageList);
-      setFilteredVillages(villageList);
-    } catch (error) {
-      console.error('Error loading villages:', error);
-    }
-  };
-
-  const handleInputChange = (field, value) => {
-    // Log dropdown changes for vehicleType and strNumber (STR Status)
-    if (field === 'vehicleType' || field === 'strNumber') {
-      console.log(`${field} changed to:`, value);
-    }
-    
-    setFormData(prev => ({
+  /** Picking a known vehicle carries its driver and mobile across. */
+  const handleVehiclePick = (vehicleNumber) => {
+    const vehicle = vehicles.find((item) => item.vehicleNumber === vehicleNumber);
+    setFormData((prev) => ({
       ...prev,
-      [field]: value
+      vehicleNumber,
+      driverName: vehicle?.driverName || prev.driverName,
+      mobileNumber: vehicle?.mobileNumber || prev.mobileNumber
     }));
-    
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors(prev => ({
-        ...prev,
-        [field]: null
-      }));
+    setErrors((prev) => ({ ...prev, vehicleNumber: null }));
+  };
+
+  const handleVehicleCreate = (vehicleNumber) => {
+    setField('vehicleNumber', vehicleNumber.toUpperCase());
+  };
+
+  const handleVillagesChange = (next, option) => {
+    setField('villages', next);
+    // Usage count drives the ordering of the village list; fire and forget.
+    if (option && next.includes(option.value)) {
+      const village = allVillages.find((item) => item.villageName === option.value);
+      if (village?.id) villageService.updateVillageUsage(village.id).catch(() => {});
     }
   };
 
-  const handleVehicleSearch = (query) => {
-    setFormData(prev => ({ ...prev, vehicleNumber: query }));
-    
-    if (query.trim()) {
-      const filtered = vehicles.filter(vehicle =>
-        vehicle.vehicleNumber.toLowerCase().includes(query.toLowerCase()) ||
-        vehicle.driverName.toLowerCase().includes(query.toLowerCase())
-      );
-      setFilteredVehicles(filtered);
-      setShowVehicleDropdown(true);
-    } else {
-      setFilteredVehicles(vehicles);
-      setShowVehicleDropdown(false);
+  const handleVillageCreate = async (villageName) => {
+    if (formData.villages.includes(villageName)) return;
+
+    // Optimistic: the chip appears immediately, Firestore catches up.
+    setField('villages', [...formData.villages, villageName]);
+
+    try {
+      const created = await villageService.addVillage({
+        villageName,
+        isActive: true,
+        usageCount: 1
+      });
+      setAllVillages((prev) => [...prev, created]);
+    } catch (error) {
+      console.error('Error adding new village:', error);
+      toast.error(`Could not save “${villageName}”`);
     }
   };
 
-  const handleVehicleSelect = (vehicle) => {
-    setFormData(prev => ({
-      ...prev,
-      vehicleNumber: vehicle.vehicleNumber,
-      driverName: vehicle.driverName || '',
-      mobileNumber: vehicle.mobileNumber || ''
-    }));
-    setShowVehicleDropdown(false);
+  const removeVillage = (villageName) =>
+    setField(
+      'villages',
+      formData.villages.filter((item) => item !== villageName)
+    );
+
+  const validate = () => {
+    const next = {};
+
+    if (!formData.vehicleNumber.trim()) next.vehicleNumber = 'Vehicle number is required';
+    if (!formData.strNumber?.trim()) next.strNumber = 'STR status is required';
+    if (!formData.vehicleType) next.vehicleType = 'Vehicle type is required';
+    if (formData.villages.length === 0) next.villages = 'Add at least one village';
+    if (!formData.driverName.trim()) next.driverName = 'Driver name is required';
+
+    if (!formData.mobileNumber.trim()) next.mobileNumber = 'Mobile number is required';
+    else if (!/^[6-9]\d{9}$/.test(formData.mobileNumber))
+      next.mobileNumber = 'Enter a valid 10-digit mobile number';
+
+    if (formData.advanceAmount && parseFloat(formData.advanceAmount) < 0)
+      next.advanceAmount = 'Advance cannot be negative';
+
+    setErrors(next);
+    return Object.keys(next).length === 0;
   };
 
-  const handleVillageSearch = (query) => {
-    setVillageSearchQuery(query);
-    
-    if (query.trim()) {
-      const filtered = allVillages.filter(village =>
-        village.villageName.toLowerCase().includes(query.toLowerCase())
-      );
-      setFilteredVillages(filtered);
-      setShowVillageDropdown(true);
-    } else {
-      setFilteredVillages(allVillages);
-      setShowVillageDropdown(false);
-    }
-  };
+  const handleSubmit = async (event) => {
+    event.preventDefault();
 
-  const handleVillageSelect = (village) => {
-    if (!formData.villages.includes(village.villageName)) {
-      setFormData(prev => ({
-        ...prev,
-        villages: [...prev.villages, village.villageName]
-      }));
-      
-      // Update village usage
-      villageService.updateVillageUsage(village.id);
-    }
-    setVillageSearchQuery('');
-    setShowVillageDropdown(false);
-  };
-
-  const addNewVillage = async () => {
-    if (villageSearchQuery.trim() && !formData.villages.includes(villageSearchQuery.trim())) {
-      try {
-        const newVillage = await villageService.addVillage({
-          villageName: villageSearchQuery.trim(),
-          isActive: true,
-          usageCount: 1
-        });
-        
-        setFormData(prev => ({
-          ...prev,
-          villages: [...prev.villages, villageSearchQuery.trim()]
-        }));
-        
-        setAllVillages(prev => [...prev, newVillage]);
-        setVillageSearchQuery('');
-        setShowVillageDropdown(false);
-        showToastMessage('New village added successfully!');
-      } catch (error) {
-        console.error('Error adding new village:', error);
-        showToastMessage('Error adding new village');
-      }
-    }
-  };
-
-  const removeVillage = (villageToRemove) => {
-    setFormData(prev => ({
-      ...prev,
-      villages: prev.villages.filter(village => village !== villageToRemove)
-    }));
-  };
-
-  const validateForm = () => {
-    const newErrors = {};
-    
-    if (!formData.vehicleNumber.trim()) {
-      newErrors.vehicleNumber = 'Vehicle number is required';
-    }
-    
-    if (!formData.strNumber || !formData.strNumber.trim()) {
-      newErrors.strNumber = 'STR status is required';
-    }
-    
-    if (!formData.vehicleType) {
-      newErrors.vehicleType = 'Vehicle type is required';
-    }
-    
-    if (formData.villages.length === 0) {
-      newErrors.villages = 'At least one village is required';
-    }
-    
-    // Quantity is now optional - no validation required
-    
-    if (!formData.driverName.trim()) {
-      newErrors.driverName = 'Driver name is required';
-    }
-    
-    if (!formData.mobileNumber.trim()) {
-      newErrors.mobileNumber = 'Mobile number is required';
-    } else if (!/^[6-9]\d{9}$/.test(formData.mobileNumber)) {
-      newErrors.mobileNumber = 'Valid 10-digit mobile number is required';
-    }
-    
-    if (formData.advanceAmount && parseFloat(formData.advanceAmount) < 0) {
-      newErrors.advanceAmount = 'Advance amount cannot be negative';
-    }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
-      showToastMessage('Please fix the errors and try again');
+    if (!validate()) {
+      toast.error('Check the highlighted fields');
       return;
     }
-    
-    setLoading(true);
-    
+
+    setSaving(true);
+    const startedAt = performance.now();
+
     try {
-      // Log form data before submission
-      console.log('Submitting trip data:', {
-        vehicleType: formData.vehicleType,
-        strStatus: formData.strNumber
-      });
-      
       const tripData = createTripEntry({
-        slNumber: parseInt(formData.slNumber),
+        slNumber: parseInt(formData.slNumber, 10),
         date: new Date(formData.date),
         vehicleNumber: formData.vehicleNumber.trim(),
         strNumber: formData.strNumber.trim(),
@@ -286,370 +207,210 @@ const AddEntryForm = () => {
         mobileNumber: formData.mobileNumber.trim(),
         advanceAmount: parseFloat(formData.advanceAmount) || 0
       });
-      
-      console.log('Created trip entry:', tripData);
+
       await tripService.addTrip(tripData);
-      
-      // Update vehicle information if changed
-      const existingVehicle = vehicles.find(v => v.vehicleNumber === formData.vehicleNumber);
-      if (!existingVehicle || 
-          existingVehicle.driverName !== formData.driverName ||
-          existingVehicle.mobileNumber !== formData.mobileNumber) {
+
+      // Keep the vehicle book in step with whatever was entered here.
+      const existing = vehicles.find((item) => item.vehicleNumber === formData.vehicleNumber);
+      if (
+        !existing ||
+        existing.driverName !== formData.driverName ||
+        existing.mobileNumber !== formData.mobileNumber
+      ) {
         await vehicleService.addVehicle({
-          vehicleNumber: formData.vehicleNumber,
-          driverName: formData.driverName,
-          mobileNumber: formData.mobileNumber,
+          vehicleNumber: formData.vehicleNumber.trim(),
+          driverName: formData.driverName.trim(),
+          mobileNumber: formData.mobileNumber.trim(),
+          vehicleType: formData.vehicleType,
           isActive: true
         });
       }
-      
-      showToastMessage('Trip entry added successfully!');
-      
-      // Navigate back after success
-      navigationTimeoutRef.current = setTimeout(() => {
-        navigate('/');
-      }, 1500);
-      
+
+      toast.success(`Trip saved in ${Math.round(performance.now() - startedAt)} ms`);
+      navigate('/');
     } catch (error) {
       console.error('Error adding trip entry:', error);
-      showToastMessage('Error adding trip entry. Please try again.');
+      toast.error('Could not save the trip');
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
-  };
-
-  const showToastMessage = (message) => {
-    setToastMessage(message);
-    setShowToast(true);
-    
-    // Clear existing toast timeout
-    if (toastTimeoutRef.current) {
-      clearTimeout(toastTimeoutRef.current);
-    }
-    
-    // Set new timeout
-    toastTimeoutRef.current = setTimeout(() => {
-      setShowToast(false);
-    }, 3000);
   };
 
   return (
-    <div className="add-entry-form">
-      <div className="form-header">
-        <h1 className="form-title">New Trip</h1>
-        <p className="form-subtitle">Vehicle, driver and advance details</p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="entry-form">
-        {/* SL Number */}
-        <div className="form-group">
-          <label className="form-label">SL Number</label>
-          <div className="sl-number-container">
-            <input
-              type="number"
-              value={formData.slNumber}
-              onChange={(e) => handleInputChange('slNumber', e.target.value)}
-              placeholder="Enter SL number or leave empty for auto"
-              className="form-input sl-number-input"
-              min="1"
-            />
-            <button
-              type="button"
-              onClick={() => handleInputChange('slNumber', '')}
-              className="auto-btn"
-              title="Auto-generate SL number"
-            >
-              <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                <circle cx="12" cy="12" r="3"></circle>
-              </svg>
-              Auto
-            </button>
-          </div>
-          <div className="sl-number-help">
-            Leave empty to auto-generate next available number
-          </div>
+    <form className="entry" onSubmit={handleSubmit} noValidate>
+      {/* Identity header: what this record is, before any data entry. */}
+      <Card className="entry__hero">
+        <span className="entry__hero-icon">
+          <TruckIcon size={26} />
+        </span>
+        <div className="entry__hero-text">
+          <span className="entry__hero-title">Trip #{formData.slNumber || '—'}</span>
+          <span className="entry__hero-sub">
+            {format(new Date(formData.date), 'EEEE, d MMMM yyyy')}
+          </span>
         </div>
+      </Card>
 
-        {/* Date */}
-        <div className="form-group">
-          <label className="form-label">Date</label>
-          <input
-            type="date"
-            value={formData.date}
-            onChange={(e) => handleInputChange('date', e.target.value)}
-            className={`form-input ${errors.date ? 'error' : ''}`}
+      <ListSection header="Vehicle" footer={errors.vehicleNumber || errors.driverName || errors.mobileNumber}>
+        <ListRow>
+          <Picker
+            label="Number"
+            layout="row"
+            value={formData.vehicleNumber}
+            options={vehicleOptions}
+            onChange={handleVehiclePick}
+            onCreate={handleVehicleCreate}
+            createLabel="Use"
+            searchable
+            searchPlaceholder="Search or type a new number"
+            placeholder="Select vehicle"
+            error={errors.vehicleNumber}
           />
-          {errors.date && <span className="error-text">{errors.date}</span>}
-        </div>
+        </ListRow>
 
-        {/* Vehicle Number with Search */}
-        <div className="form-group">
-          <label className="form-label">Vehicle Number</label>
-          <div className="search-container" ref={vehicleFieldRef}>
-            <input
-              type="text"
-              value={formData.vehicleNumber}
-              onChange={(e) => handleVehicleSearch(e.target.value)}
-              onFocus={() => setShowVehicleDropdown(true)}
-              placeholder="Search or enter vehicle number"
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="characters"
-              spellCheck="false"
-              enterKeyHint="next"
-              className={`form-input search-input ${errors.vehicleNumber ? 'error' : ''}`}
-            />
-            <svg className="search-icon icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <circle cx="11" cy="11" r="8"></circle>
-              <path d="m21 21-4.35-4.35"></path>
-            </svg>
-            
-            {showVehicleDropdown && filteredVehicles.length > 0 && (
-              <div className="dropdown">
-                {filteredVehicles.map((vehicle) => (
-                  <div
-                    key={vehicle.vehicleNumber}
-                    className="dropdown-item"
-                    role="button"
-                    tabIndex={0}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => handleVehicleSelect(vehicle)}
-                  >
-                    <div className="dropdown-primary">{vehicle.vehicleNumber}</div>
-                    <div className="dropdown-secondary">{vehicle.driverName} • {vehicle.mobileNumber}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          {errors.vehicleNumber && <span className="error-text">{errors.vehicleNumber}</span>}
-        </div>
-
-        {/* STR Status */}
-        <div className="form-group">
-          <label className="form-label">STR Status</label>
-          <select
-            value={formData.strNumber}
-            onChange={(e) => handleInputChange('strNumber', e.target.value)}
-            className={`form-input form-select ${errors.strNumber ? 'error' : ''}`}
-          >
-            <option value="not received">Not Received</option>
-            <option value="Received">Received</option>
-          </select>
-          {errors.strNumber && <span className="error-text">{errors.strNumber}</span>}
-        </div>
-        
-        {/* Vehicle Type */}
-        <div className="form-group">
-          <label className="form-label">Vehicle Type</label>
-          <select
+        <ListRow title="Type">
+          <Segmented
+            className="entry__segmented"
+            options={VEHICLE_TYPES}
             value={formData.vehicleType}
-            onChange={(e) => handleInputChange('vehicleType', e.target.value)}
-            className={`form-input form-select ${errors.vehicleType ? 'error' : ''}`}
-          >
-            <option value="lorry">Lorry</option>
-            <option value="tempo">Tempo</option>
-            <option value="pickup">Pickup</option>
-          </select>
-          {errors.vehicleType && <span className="error-text">{errors.vehicleType}</span>}
-        </div>
-
-        {/* Villages */}
-        <div className="form-group">
-          <label className="form-label">Villages</label>
-          <div className="villages-container">
-            {formData.villages.length > 0 && (
-              <div className="selected-villages">
-                {formData.villages.map((village, index) => (
-                  <span key={index} className="village-chip">
-                    {village}
-                    <button
-                      type="button"
-                      onClick={() => removeVillage(village)}
-                      className="remove-chip"
-                    >
-                      <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                      </svg>
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-            
-            <div className="search-container" ref={villageFieldRef}>
-              <input
-                type="text"
-                value={villageSearchQuery}
-                onChange={(e) => handleVillageSearch(e.target.value)}
-                onFocus={() => setShowVillageDropdown(true)}
-                placeholder="Search and add villages"
-                autoComplete="off"
-                autoCorrect="off"
-                spellCheck="false"
-                enterKeyHint="done"
-                onKeyDown={(e) => {
-                  if (e.key !== 'Enter') return;
-                  e.preventDefault();
-                  const exact = filteredVillages.find(
-                    (v) => v.villageName.toLowerCase() === villageSearchQuery.trim().toLowerCase()
-                  );
-                  if (exact) {
-                    handleVillageSelect(exact);
-                  } else if (filteredVillages.length === 1) {
-                    handleVillageSelect(filteredVillages[0]);
-                  } else {
-                    addNewVillage();
-                  }
-                }}
-                className="form-input search-input"
-              />
-              <button
-                type="button"
-                onClick={addNewVillage}
-                className="add-button"
-                disabled={!villageSearchQuery.trim()}
-              >
-                <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <line x1="12" y1="5" x2="12" y2="19"></line>
-                  <line x1="5" y1="12" x2="19" y2="12"></line>
-                </svg>
-              </button>
-              
-              {showVillageDropdown && filteredVillages.length > 0 && (
-                <div className="dropdown">
-                  {filteredVillages.map((village) => (
-                    <div
-                      key={village.id}
-                      className={`dropdown-item ${formData.villages.includes(village.villageName) ? 'disabled' : ''}`}
-                      role="button"
-                      tabIndex={0}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => !formData.villages.includes(village.villageName) && handleVillageSelect(village)}
-                    >
-                      <div className="dropdown-primary">{village.villageName}</div>
-                      <div className="dropdown-secondary">Used {village.usageCount} times</div>
-                    </div>
-                  ))}
-                  
-                  {villageSearchQuery && !filteredVillages.some(v => v.villageName.toLowerCase() === villageSearchQuery.toLowerCase()) && (
-                    <div
-                      className="dropdown-item new-item"
-                      role="button"
-                      tabIndex={0}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={addNewVillage}
-                    >
-                      <div className="dropdown-primary">Add "{villageSearchQuery}"</div>
-                      <div className="dropdown-secondary">New village</div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-          {errors.villages && <span className="error-text">{errors.villages}</span>}
-        </div>
-
-        {/* Quantity (Optional Notes) */}
-        <div className="form-group">
-          <label className="form-label">Quantity/Notes</label>
-          <input
-            type="number"
-            step="0.01"
-            value={formData.quantity}
-            onChange={(e) => handleInputChange('quantity', e.target.value)}
-            placeholder="Enter quantity or notes (optional)"
-            inputMode="decimal"
-            className={`form-input ${errors.quantity ? 'error' : ''}`}
+            onChange={(value) => setField('vehicleType', value)}
+            ariaLabel="Vehicle type"
           />
-          {errors.quantity && <span className="error-text">{errors.quantity}</span>}
-        </div>
+        </ListRow>
 
-        {/* Driver Name */}
-        <div className="form-group">
-          <label className="form-label">Driver Name</label>
-          <input
-            type="text"
+        <ListRow>
+          <TextField
+            label="Driver"
+            layout="row"
             value={formData.driverName}
-            onChange={(e) => handleInputChange('driverName', e.target.value)}
-            placeholder="Enter driver name"
-            autoComplete="off"
+            onChange={(e) => setField('driverName', e.target.value)}
+            placeholder="Full name"
             autoCapitalize="words"
-            className={`form-input ${errors.driverName ? 'error' : ''}`}
+            autoComplete="off"
+            error={errors.driverName}
           />
-          {errors.driverName && <span className="error-text">{errors.driverName}</span>}
-        </div>
+        </ListRow>
 
-        {/* Mobile Number */}
-        <div className="form-group">
-          <label className="form-label">Mobile Number</label>
-          <input
-            type="tel"
+        <ListRow>
+          <PhoneField
+            label="Mobile"
+            layout="row"
             value={formData.mobileNumber}
-            onChange={(e) => handleInputChange('mobileNumber', e.target.value.replace(/\D/g, '').slice(0, 10))}
-            placeholder="Enter 10-digit mobile number"
-            inputMode="numeric"
-            maxLength={10}
-            autoComplete="tel"
-            className={`form-input ${errors.mobileNumber ? 'error' : ''}`}
+            onChange={(e) => setField('mobileNumber', e.target.value)}
+            placeholder="10 digits"
+            error={errors.mobileNumber}
           />
-          {errors.mobileNumber && <span className="error-text">{errors.mobileNumber}</span>}
-        </div>
+        </ListRow>
+      </ListSection>
 
-        {/* Advance Amount */}
-        <div className="form-group">
-          <label className="form-label">Advance Amount (₹)</label>
-          <input
-            type="number"
-            step="0.01"
+      <ListSection header="Route" footer={errors.villages}>
+        <ListRow
+          title="Villages"
+          value={formData.villages.length ? `${formData.villages.length} added` : undefined}
+        />
+
+        {formData.villages.length > 0 && (
+          <ListRow className="entry__chips-row">
+            <div className="entry__chips">
+              {formData.villages.map((village) => (
+                <Chip key={village} onRemove={() => removeVillage(village)}>
+                  {village}
+                </Chip>
+              ))}
+            </div>
+          </ListRow>
+        )}
+
+        <ListRow className="entry__add-row">
+          <Picker
+            label="Add villages"
+            layout="row"
+            multiple
+            value={formData.villages}
+            options={villageOptions}
+            onChange={handleVillagesChange}
+            onCreate={handleVillageCreate}
+            createLabel="Create"
+            searchable
+            searchPlaceholder="Search villages"
+            placeholder="Choose"
+          />
+        </ListRow>
+
+        <ListRow>
+          <NumberField
+            label="Quantity"
+            layout="row"
+            decimal
+            value={formData.quantity}
+            onChange={(e) => setField('quantity', e.target.value)}
+            placeholder="Optional"
+          />
+        </ListRow>
+      </ListSection>
+
+      <ListSection header="Advance & STR" footer={errors.advanceAmount}>
+        <ListRow>
+          <CurrencyField
+            label="Advance"
+            layout="row"
             value={formData.advanceAmount}
-            onChange={(e) => handleInputChange('advanceAmount', e.target.value)}
-            placeholder="Enter advance amount (optional)"
-            inputMode="decimal"
-            className={`form-input ${errors.advanceAmount ? 'error' : ''}`}
+            onChange={(e) => setField('advanceAmount', e.target.value)}
+            placeholder="0"
+            error={errors.advanceAmount}
           />
-          {errors.advanceAmount && <span className="error-text">{errors.advanceAmount}</span>}
-        </div>
+        </ListRow>
 
-        {/* Form Actions */}
-        <div className="form-actions">
-          <button
-            type="button"
-            onClick={() => navigate('/')}
-            className="btn btn-secondary"
-            disabled={loading}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={loading}
-          >
-            {loading ? (
-              <>
-                <div className="loading"></div>
-                Saving...
-              </>
-            ) : (
-              <>
-                <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                  <polyline points="17,21 17,13 7,13 7,21"></polyline>
-                  <polyline points="7,3 7,8 15,8"></polyline>
-                </svg>
-                Save Entry
-              </>
-            )}
-          </button>
-        </div>
-      </form>
+        <ListRow title="STR status">
+          <Segmented
+            className="entry__segmented"
+            options={STR_OPTIONS}
+            value={formData.strNumber}
+            onChange={(value) => setField('strNumber', value)}
+            ariaLabel="STR status"
+          />
+        </ListRow>
+      </ListSection>
 
-      <Toast opened={showToast} text={toastMessage} onToastClosed={() => setShowToast(false)} />
-    </div>
+      <ListSection
+        header="Record"
+        footer="Leave the SL number as generated unless you are backfilling an older trip."
+      >
+        <ListRow>
+          <NumberField
+            label="SL number"
+            layout="row"
+            value={formData.slNumber}
+            onChange={(e) => setField('slNumber', e.target.value)}
+            placeholder="Auto"
+          />
+        </ListRow>
+        <ListRow>
+          <DateField
+            label="Date"
+            layout="row"
+            value={formData.date}
+            onChange={(e) => setField('date', e.target.value)}
+          />
+        </ListRow>
+      </ListSection>
+
+      {/* Pinned action bar. iOS 26 puts the primary action in a bottom bar
+          rather than at the end of a long scroll. */}
+      <div className="entry__actions">
+        <Button
+          type="submit"
+          variant="filled"
+          size="lg"
+          block
+          capsule
+          loading={saving}
+          icon={!saving ? <PlusIcon size={19} /> : null}
+        >
+          {saving ? 'Saving…' : 'Save Trip'}
+        </Button>
+      </div>
+    </form>
   );
 };
 

@@ -32,10 +32,21 @@ if (!isFirebaseAvailable && !sampleDataInitialized) {
 }
 
 
-// Check if Firebase is available before operations
+// Check if Firebase is available before operations.
+// Warn once rather than on every call, so the real cause stays visible in the
+// console instead of being buried under repeats.
+let warnedUnavailable = false;
+
 const checkFirebaseAvailability = () => {
   if (!isFirebaseAvailable || !db) {
-    console.warn('Firebase not available, using local storage fallback');
+    if (!warnedUnavailable) {
+      warnedUnavailable = true;
+      console.warn(
+        'Firestore is not available, so reads and writes are using local storage. ' +
+          'Check the Firebase initialization error above and that .env.local is set ' +
+          '(the dev server must be restarted after changing it).'
+      );
+    }
     return false;
   }
   return true;
@@ -74,8 +85,15 @@ const asDate = (value) => {
   return isNaN(parsed.getTime()) ? null : parsed;
 };
 
-/** Reserve a Firestore document id client-side so we can cache before writing. */
-const newId = (collectionName) => doc(collection(db, collectionName)).id;
+/**
+ * Reserve a Firestore document id client-side so we can cache before writing.
+ * Falls back to a locally generated id when Firestore is unavailable, so the
+ * write can still land in the local store instead of throwing.
+ */
+const newId = (collectionName) => {
+  if (isFirebaseAvailable && db) return doc(collection(db, collectionName)).id;
+  return `local_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+};
 
 const byDateDesc = (a, b) => (asDate(b.date)?.getTime() || 0) - (asDate(a.date)?.getTime() || 0);
 
@@ -110,6 +128,10 @@ if (isFirebaseAvailable && db) {
 export const tripService = {
   // Add new trip
   async addTrip(tripData) {
+    if (!checkFirebaseAvailability()) {
+      return await localTripService.addTrip(tripData);
+    }
+
     try {
       // Import validation constants
       const { VEHICLE_TYPES, STR_STATUS_VALUES } = await import('../types');
@@ -243,6 +265,10 @@ export const tripService = {
 
   // Update trip
   async updateTrip(tripId, updateData) {
+    if (!checkFirebaseAvailability()) {
+      throw new Error('Cannot update a trip while offline storage is in use');
+    }
+
     try {
       // Import validation constants
       const { VEHICLE_TYPES, STR_STATUS_VALUES } = await import('../types');
@@ -298,6 +324,11 @@ export const tripService = {
 
   // Get next SL number
   async getNextSlNumber() {
+    if (!checkFirebaseAvailability()) {
+      const trips = await localTripService.getAllTrips();
+      return trips.reduce((max, trip) => Math.max(max, Number(trip.slNumber) || 0), 0) + 1;
+    }
+
     try {
       const querySnapshot = await getDocs(
         query(collection(db, COLLECTIONS.TRIPS), orderBy('slNumber', 'desc'), limit(1))
@@ -317,6 +348,10 @@ export const tripService = {
 
   // Update STR status only
   async updateSTRStatus(tripId, strStatus) {
+    if (!checkFirebaseAvailability()) {
+      throw new Error('Cannot update STR status while offline storage is in use');
+    }
+
     try {
       // Import validation constants
       const { STR_STATUS_VALUES } = await import('../types');
@@ -350,6 +385,10 @@ export const tripService = {
 export const vehicleService = {
   // Add new vehicle
   async addVehicle(vehicleData) {
+    if (!checkFirebaseAvailability()) {
+      return await localVehicleService.addVehicle(vehicleData);
+    }
+
     try {
       // Import validation constants
       const { VEHICLE_TYPES } = await import('../types');
@@ -723,6 +762,10 @@ export const advanceService = {
 export const villageService = {
   // Add new village
   async addVillage(villageData) {
+    if (!checkFirebaseAvailability()) {
+      return { ...villageData, id: newId(COLLECTIONS.VILLAGES) };
+    }
+
     try {
       const villageId = newId(COLLECTIONS.VILLAGES);
       const record = { ...villageData, createdAt: new Date(), lastUsed: new Date() };
@@ -762,6 +805,8 @@ export const villageService = {
 
   // Update village usage
   async updateVillageUsage(villageId) {
+    if (!checkFirebaseAvailability()) return;
+
     try {
       const cached = (fastSync.getMemory(COLLECTIONS.VILLAGES) || []).find(v => v.id === villageId);
       fastSync.patchCache(COLLECTIONS.VILLAGES, villageId, {

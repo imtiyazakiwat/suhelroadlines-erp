@@ -27,12 +27,14 @@ const Picker = ({
   error,
   disabled = false,
   layout = 'stacked',
+  multiple = false,
   className = ''
 }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
-  const selected = options.find((option) => option.value === value);
+  const selectedValues = multiple ? value || [] : [];
+  const selected = multiple ? null : options.find((option) => option.value === value);
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -54,9 +56,30 @@ const Picker = ({
   };
 
   const pick = (option) => {
+    if (multiple) {
+      // Toggle and keep the sheet open so several can be chosen in one visit.
+      const next = selectedValues.includes(option.value)
+        ? selectedValues.filter((item) => item !== option.value)
+        : [...selectedValues, option.value];
+      onChange?.(next, option);
+      setQuery('');
+      return;
+    }
+
     onChange?.(option.value, option);
     close();
   };
+
+  const isChosen = (option) =>
+    multiple ? selectedValues.includes(option.value) : option.value === value;
+
+  const triggerText = multiple
+    ? selectedValues.length
+      ? `${selectedValues.length} selected`
+      : placeholder
+    : selected?.label || placeholder;
+
+  const hasValue = multiple ? selectedValues.length > 0 : Boolean(selected);
 
   return (
     <>
@@ -71,9 +94,7 @@ const Picker = ({
           aria-haspopup="dialog"
           aria-expanded={open}
         >
-          <span className={`pkr26__value ${selected ? '' : 'is-placeholder'}`}>
-            {selected?.label || placeholder}
-          </span>
+          <span className={`pkr26__value ${hasValue ? '' : 'is-placeholder'}`}>{triggerText}</span>
           <svg
             className="pkr26__chevrons"
             viewBox="0 0 24 24"
@@ -101,6 +122,13 @@ const Picker = ({
         onClose={close}
         title={label || 'Select'}
         detent={options.length > 7 || searchable ? 'medium' : 'auto'}
+        primaryAction={
+          multiple ? (
+            <button type="button" className="pkr26__done" onClick={close}>
+              Done
+            </button>
+          ) : null
+        }
       >
         {searchable && (
           <div className="pkr26__search">
@@ -121,7 +149,7 @@ const Picker = ({
               subtitle={option.subtitle}
               onClick={() => pick(option)}
               accessory={
-                option.value === value ? (
+                isChosen(option) ? (
                   <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false">
                     <path
                       d="m5 12.5 4.5 4.5L19 7.5"
@@ -134,7 +162,7 @@ const Picker = ({
                   </svg>
                 ) : null
               }
-              className={option.value === value ? 'is-checked' : ''}
+              className={isChosen(option) ? 'is-checked' : ''}
             />
           ))}
 

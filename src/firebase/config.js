@@ -3,6 +3,7 @@
 // Firestore = system of record. Realtime Database = low-latency cache + sync channel.
 import { initializeApp } from 'firebase/app';
 import {
+  getFirestore,
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager
@@ -40,10 +41,25 @@ if (missing.length) {
 
     // Persistent multi-tab cache: reads and writes hit the local IndexedDB copy
     // first, so the UI updates immediately and works offline.
-    db = initializeFirestore(app, {
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-    });
-    isFirebaseAvailable = true;
+    //
+    // This throws whenever IndexedDB is unavailable — Safari private browsing,
+    // blocked storage, some embedded webviews. Falling back to the in-memory
+    // Firestore instance matters: without it `db` stayed null, reads quietly
+    // dropped to localStorage, and every write died on
+    // "Expected first argument to collection() to be a CollectionReference".
+    try {
+      db = initializeFirestore(app, {
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+      });
+    } catch (cacheError) {
+      console.warn(
+        'Firestore persistent cache unavailable, continuing without it:',
+        cacheError?.message || cacheError
+      );
+      db = getFirestore(app);
+    }
+
+    isFirebaseAvailable = Boolean(db);
 
     if (firebaseConfig.databaseURL) {
       try {
@@ -54,7 +70,8 @@ if (missing.length) {
       }
     }
   } catch (error) {
-    console.error('Firebase initialization failed:', error);
+    console.error('Firebase initialization failed, falling back to local storage:', error);
+    db = null;
     isFirebaseAvailable = false;
   }
 }
