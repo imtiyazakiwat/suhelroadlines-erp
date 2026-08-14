@@ -5,6 +5,10 @@
 [build.environment]
   CI = "false"
   DISABLE_ESLINT_PLUGIN = "true"
+  # The REACT_APP_FIREBASE_* values are deliberately NOT listed here — this file
+  # is committed. Set them under Site configuration > Environment variables.
+  # Without them the deployed build logs "Firebase config incomplete" and falls
+  # back to local storage, which looks like an app with no data.
 
 # Additional configuration for better performance
 [build.processing]

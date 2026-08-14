@@ -68,6 +68,13 @@ if (missing.length) {
       } catch (rtdbError) {
         console.warn('Realtime Database unavailable, using Firestore only:', rtdbError.message);
       }
+    } else {
+      // Not fatal, but fastSync loses its fast tier and its cross-device sync
+      // channel, so every read waits on Firestore. Worth saying out loud.
+      console.warn(
+        'REACT_APP_FIREBASE_DATABASE_URL is not set, so the Realtime Database cache is off ' +
+          'and reads go straight to Firestore.'
+      );
     }
   } catch (error) {
     console.error('Firebase initialization failed, falling back to local storage:', error);
@@ -87,9 +94,8 @@ if (app && firebaseConfig.measurementId && process.env.NODE_ENV === 'production'
     .catch(() => {});
 }
 
-// auth/storage stay unused for now; exported as null so old imports keep working.
-export const auth = null;
-export const storage = null;
-
+/* Deliberately narrow surface. `auth` and `storage` used to be exported as null
+   "so old imports keep working" — nothing imported them, and neither did the
+   default `app` export. They are gone so there is exactly one way to reach
+   Firebase: these four bindings, all derived from .env.local. */
 export { db, rtdb };
-export default app;

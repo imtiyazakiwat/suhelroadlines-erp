@@ -212,10 +212,19 @@ works now that the visible button is outside the `<form>`, and their
 
 ### `src/firebase/config.js`
 
-Config comes **only** from `.env.local` (`REACT_APP_FIREBASE_*`). Project is
-`suhail-roadlines` — note the app previously hardcoded a *different* project
-(`suhelroadlineserp`). `.env.example` documents the keys. **CRA reads
-`.env.local` only at dev-server startup, so restart after changing it.**
+Config comes **only** from `.env.local` (`REACT_APP_FIREBASE_*`); nothing is
+hardcoded and there is no second project anywhere in the tree. Project is
+`suhail-roadlines`. `.env.example` documents the keys. **CRA reads `.env.local`
+only at dev-server startup, so restart after changing it.**
+
+The module exports exactly four bindings — `db`, `rtdb`, `isFirebaseAvailable`,
+`isRealtimeAvailable`. The old `auth` / `storage` / default-`app` exports are
+gone; they were null placeholders kept "so old imports keep working" and nothing
+imported them.
+
+Deployment note: `netlify.toml` intentionally carries no Firebase values. They
+must be set in Netlify's own environment variables, or the deployed build falls
+back to local storage and looks like an app with no data.
 
 Firestore initialises with `persistentLocalCache` +
 `persistentMultipleTabManager`, and **falls back to plain `getFirestore(app)`
@@ -349,10 +358,9 @@ converted screens.
 `advances` / `villages` all returned `{}`, and RTDB `/` returned `null`. That was
 why every screen and every date range showed nothing; not a query bug.
 
-The historical data is in the old hardcoded project, `suhelroadlineserp`, which
-now answers `CONSUMER_INVALID` / 403 — deleted, or its key is restricted. **It
-cannot be read from this machine.** If that data still matters, check the
-Firebase console for `suhelroadlineserp` before assuming it is gone.
+Any historical records lived in an earlier Firebase project that was deleted
+long ago. It is unreachable and **not recoverable** — treat `suhail-roadlines` as
+the only data source and don't go looking for the old one.
 
 Current contents are mock records seeded via the Firestore REST API: 4 vehicles,
 7 villages, 13 trips (9 this month, 4 last month; 8 STR due / 5 received) and 16

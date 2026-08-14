@@ -61,21 +61,39 @@ A comprehensive iOS-themed mobile application for managing travel operations, in
    ```
 
 3. **Configure Firebase**
-   - Create a Firebase project at [https://console.firebase.google.com/](https://console.firebase.google.com/)
-   - Enable Firestore Database, Authentication, and Storage
-   - Copy your Firebase configuration
-   - Update `src/firebase/config.js` with your Firebase credentials:
 
-   ```javascript
-   const firebaseConfig = {
-     apiKey: "your-api-key",
-     authDomain: "your-project.firebaseapp.com",
-     projectId: "your-project-id",
-     storageBucket: "your-project.appspot.com",
-     messagingSenderId: "123456789",
-     appId: "your-app-id"
-   };
+   Credentials are **never** committed or hardcoded. `src/firebase/config.js`
+   reads them only from the environment, so configuration means writing one file.
+
+   - Create a Firebase project at [https://console.firebase.google.com/](https://console.firebase.google.com/)
+   - Enable **Firestore Database** and **Realtime Database** (the app uses the
+     Realtime Database as a low-latency cache in front of Firestore)
+   - From Project settings → Your apps → SDK setup, copy the config values
+   - Copy `.env.example` to `.env.local` and fill in every key:
+
+   ```bash
+   cp .env.example .env.local
    ```
+
+   ```
+   REACT_APP_FIREBASE_API_KEY=…
+   REACT_APP_FIREBASE_AUTH_DOMAIN=…
+   REACT_APP_FIREBASE_DATABASE_URL=…
+   REACT_APP_FIREBASE_PROJECT_ID=…
+   REACT_APP_FIREBASE_STORAGE_BUCKET=…
+   REACT_APP_FIREBASE_MESSAGING_SENDER_ID=…
+   REACT_APP_FIREBASE_APP_ID=…
+   REACT_APP_FIREBASE_MEASUREMENT_ID=…
+   ```
+
+   `.env.local` is gitignored. **Create React App reads it only when the dev
+   server starts**, so restart after any change — otherwise the app logs
+   "Firebase config incomplete" and quietly falls back to local storage even
+   though the file looks correct.
+
+   For deployment, set the same variables in your host's build environment
+   (Netlify: Site configuration → Environment variables). They are not in
+   `netlify.toml` on purpose.
 
 4. **Set up Firestore Security Rules**
    ```javascript
