@@ -10,11 +10,9 @@ import SimpleSettings from './components/Settings/SimpleSettings';
 import SimpleSTRStatus from './components/STRStatus/SimpleSTRStatus';
 import { ToastProvider } from './ui';
 
-// Order matters. The legacy sheet loads first so the un-migrated screens keep
-// their tokens, then ios26.css lands last and wins every shared declaration
-// (body background, type ramp, colours). Reversing these two makes the new
-// design system invisible.
-import './App.css';
+// Single token layer. The legacy sheet that used to load ahead of this one is
+// gone: Reports was the last screen on it, and its globals (border-box, heading
+// margin reset) moved to index.css.
 import './styles/ios26.css';
 
 function App() {

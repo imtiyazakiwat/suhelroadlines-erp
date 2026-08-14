@@ -1,1034 +1,1276 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CSVLink } from 'react-csv';
-import { tripService, vehicleService, advanceService } from '../../services/firebaseService';
-import { calculateAdvanceTotals, formatCurrency as utilFormatCurrency } from '../../types';
-import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays } from 'date-fns';
-import Toast from '../Common/Toast';
+import {
+  format,
+  startOfDay,
+  endOfDay,
+  startOfMonth,
+  endOfMonth,
+  startOfYear,
+  endOfYear,
+  subDays,
+  subMonths,
+  subYears,
+  eachDayOfInterval,
+  eachMonthOfInterval,
+  differenceInCalendarDays
+} from 'date-fns';
+import { tripService, vehicleService, advanceService, villageService } from '../../services/firebaseService';
+import { toDate, isStrReceived, formatINR, formatCompactINR } from '../../services/homeService';
+import { VEHICLE_TYPES } from '../../types';
+import {
+  Button,
+  Card,
+  SectionHeader,
+  Segmented,
+  SearchField,
+  DateField,
+  TextField,
+  NumberField,
+  PhoneField,
+  CurrencyField,
+  Picker,
+  ListSection,
+  ListRow,
+  Badge,
+  Stat,
+  EmptyState,
+  Skeleton,
+  Sheet,
+  Alert,
+  BarChart,
+  useToast
+} from '../../ui';
+import {
+  TruckIcon,
+  WalletIcon,
+  DocCheckIcon,
+  DocAlertIcon,
+  CalendarIcon,
+  ChevronDownIcon,
+  TrendUpIcon,
+  ChartIcon
+} from '../Common/Icons';
 import './ReportsPage.css';
 
-const ReportsPage = () => {
-  const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState('trips');
-  const [filters, setFilters] = useState({
-    dateFrom: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
-    dateTo: format(endOfMonth(new Date()), 'yyyy-MM-dd'),
-    vehicleNumber: '',
-    village: ''
-  });
-  
-  const [data, setData] = useState({
-    trips: [],
-    advances: [],
-    summary: {
-      totalTrips: 0,
-      totalAdvances: 0,
-      totalQuantity: 0,
-      uniqueVehicles: 0,
-      avgAdvancePerTrip: 0
-    }
-  });
-  
-  // eslint-disable-next-line no-unused-vars
-  const [vehicles, setVehicles] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  const [showToast, setShowToast] = useState(false);
-  const [csvData, setCsvData] = useState([]);
-  
-  // Edit trip state
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editingTrip, setEditingTrip] = useState(null);
-  const [editFormData, setEditFormData] = useState({
-    slNumber: '',
-    date: '',
-    vehicleNumber: '',
-    strNumber: '',
-    vehicleType: 'lorry',
-    villages: [],
-    quantity: '',
-    driverName: '',
-    mobileNumber: '',
-    advanceAmount: ''
-  });
-  const [editErrors, setEditErrors] = useState({});
-  const [editLoading, setEditLoading] = useState(false);
+/* =============================================================================
+   Reports.
 
-  const loadInitialData = useCallback(async () => {
-    try {
-      const vehicleList = await vehicleService.getAllVehicles();
-      setVehicles(vehicleList);
-    } catch (error) {
-      console.error('Error loading initial data:', error);
+   The screen answers one question — "how did this period go, and which trips
+   need attention?" — and it answers it in the order Apple's chart guidance
+   prescribes (WWDC22 "Design an effective chart" and "Design app experiences
+   with charts"): a description that states the take-away in words and a
+   concrete number, then the chart, then the detail.
+
+   Reading order, and why:
+     1  range control      scopes everything below it, so it comes first
+     2  take-away card     the one number, plus a comparison so it means
+                           something. A chart's description should be
+                           informative read on its own
+     3  chart              pattern over time, one measure at a time
+     4  stat row           secondary magnitudes; not the take-away
+     5  vehicle breakdown  "unique vehicles: 4" is a dead end. Which vehicles,
+                           and how much each, is the actionable version
+     6  records            the individual values, tap for the full detail
+     7  export             a terminal action, so it sits at the end
+
+   Cost: trips and advances are each read once per mount from the fastSync
+   cache. Everything after that is derived in memos — O(T + A) to join once,
+   then O(T) per filter keystroke with no network at all. The old version
+   refetched both collections on every keystroke and ran the advance join twice.
+   ========================================================================== */
+
+const RANGES = [
+  { value: 'today', label: 'Day' },
+  { value: 'week', label: 'Week' },
+  { value: 'month', label: 'Month' },
+  { value: 'year', label: 'Year' }
+];
+
+/* "Trip count" rather than "Trips": the records section below already has a
+   Trips tab, and two controls on one screen with the same accessible name is
+   ambiguous for screen readers and for anyone reading the labels. */
+const MEASURES = [
+  { value: 'advance', label: 'Advance' },
+  { value: 'trips', label: 'Trip count' },
+  { value: 'quantity', label: 'Quantity' }
+];
+
+const TABS = [
+  { value: 'trips', label: 'Trips' },
+  { value: 'advances', label: 'Advances' }
+];
+
+const STR_OPTIONS = [
+  { value: 'not received', label: 'Due' },
+  { value: 'Received', label: 'Received' }
+];
+
+const TYPE_OPTIONS = VEHICLE_TYPES.map((type) => ({
+  value: type,
+  label: type.charAt(0).toUpperCase() + type.slice(1)
+}));
+
+/** `new Date('2026-08-01')` is UTC midnight, which shifts the boundary a day in
+    IST. Parse the parts so a date input means that day, locally. */
+const parseLocalDate = (value) => {
+  if (!value) return null;
+  const [year, month, day] = String(value).split('-').map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+};
+
+const iso = (date) => format(date, 'yyyy-MM-dd');
+
+/** Current and preceding window for a range key. The comparison window is the
+    real previous calendar period, not just "minus N days", so "vs last month"
+    is honest for months of unequal length. */
+const resolveWindow = (range, custom) => {
+  const now = new Date();
+
+  switch (range) {
+    case 'today':
+      return {
+        from: startOfDay(now),
+        to: endOfDay(now),
+        prevFrom: startOfDay(subDays(now, 1)),
+        prevTo: endOfDay(subDays(now, 1)),
+        comparisonLabel: 'yesterday'
+      };
+    case 'week':
+      return {
+        from: startOfDay(subDays(now, 6)),
+        to: endOfDay(now),
+        prevFrom: startOfDay(subDays(now, 13)),
+        prevTo: endOfDay(subDays(now, 7)),
+        comparisonLabel: 'previous week'
+      };
+    case 'year':
+      return {
+        from: startOfYear(now),
+        to: endOfYear(now),
+        prevFrom: startOfYear(subYears(now, 1)),
+        prevTo: endOfYear(subYears(now, 1)),
+        comparisonLabel: 'last year'
+      };
+    case 'custom': {
+      const from = startOfDay(parseLocalDate(custom.from) || startOfMonth(now));
+      const to = endOfDay(parseLocalDate(custom.to) || endOfMonth(now));
+      const span = Math.max(0, differenceInCalendarDays(to, from));
+      return {
+        from,
+        to,
+        prevFrom: startOfDay(subDays(from, span + 1)),
+        prevTo: endOfDay(subDays(from, 1)),
+        comparisonLabel: 'previous period'
+      };
     }
+    case 'month':
+    default:
+      return {
+        from: startOfMonth(now),
+        to: endOfMonth(now),
+        prevFrom: startOfMonth(subMonths(now, 1)),
+        prevTo: endOfMonth(subMonths(now, 1)),
+        comparisonLabel: 'last month'
+      };
+  }
+};
+
+const inWindow = (value, from, to) => {
+  const when = toDate(value)?.getTime();
+  if (when == null) return false;
+  return when >= from.getTime() && when <= to.getTime();
+};
+
+/** An advance belongs to the period it was advanced *for*, falling back to when
+    it was recorded. The old page filtered trips on `date` but advances on
+    `createdAt`, so an advance logged late silently left the totals. */
+const advanceWhen = (advance) => advance.tripDate || advance.createdAt;
+
+const measureOf = (trip, measure) => {
+  if (measure === 'trips') return 1;
+  if (measure === 'quantity') return Number(trip.quantity) || 0;
+  return Number(trip.totalAdvances) || 0;
+};
+
+const ReportsPage = () => {
+  const toast = useToast();
+
+  const [trips, setTrips] = useState([]);
+  const [advances, setAdvances] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
+  const [villages, setVillages] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const [measure, setMeasure] = useState('advance');
+  const [query, setQuery] = useState('');
+  const [selectedBar, setSelectedBar] = useState(null);
+
+  const [rangeSheet, setRangeSheet] = useState(false);
+  const [custom, setCustom] = useState({
+    from: iso(startOfMonth(new Date())),
+    to: iso(endOfMonth(new Date()))
+  });
+
+  const [detailTrip, setDetailTrip] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null);
+
+  /* --------------------------------------------------------------- routing */
+  // ?range=today|week|month|year and ?tab=trips|advances, written back on
+  // interaction so a deep link and the visible state never disagree.
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const rangeParam = searchParams.get('range');
+  const range = RANGES.some((item) => item.value === rangeParam) || rangeParam === 'custom'
+    ? rangeParam
+    : 'month';
+
+  const tabParam = searchParams.get('tab');
+  const tab = TABS.some((item) => item.value === tabParam) ? tabParam : 'trips';
+
+  const setParam = useCallback(
+    (key, value, fallback) => {
+      const next = new URLSearchParams(searchParams);
+      if (value === fallback) next.delete(key);
+      else next.set(key, value);
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams]
+  );
+
+  const setRange = (value) => setParam('range', value, 'month');
+  const setTab = (value) => setParam('tab', value, 'trips');
+
+  /* ------------------------------------------------------------------ load */
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      // Four cache-backed reads, once. Range and search are applied in memos
+      // below, so changing either costs nothing.
+      const [tripList, advanceList, vehicleList, villageList] = await Promise.all([
+        tripService.getAllTrips(),
+        advanceService.getAllAdvances(),
+        vehicleService.getAllVehicles(),
+        villageService.getAllVillages().catch(() => [])
+      ]);
+
+      setTrips(tripList || []);
+      setAdvances(advanceList || []);
+      setVehicles(vehicleList || []);
+      setVillages(villageList || []);
+    } catch (error) {
+      console.error('Error loading report data:', error);
+      toast.error('Could not load reports');
+    } finally {
+      setLoading(false);
+    }
+    // toast identity is stable from the provider
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadReportData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const startDate = new Date(filters.dateFrom);
-      const endDate = new Date(filters.dateTo);
-      endDate.setHours(23, 59, 59, 999);
-      
-      let trips = await tripService.getTripsByDateRange(startDate, endDate);
-      
-      // Apply filters
-      if (filters.vehicleNumber) {
-        trips = trips.filter(trip => 
-          trip.vehicleNumber.toLowerCase().includes(filters.vehicleNumber.toLowerCase())
-        );
-      }
-      
-      if (filters.village) {
-        trips = trips.filter(trip => 
-          trip.villages?.some(village => 
-            village.toLowerCase().includes(filters.village.toLowerCase())
-          )
-        );
-      }
-      
-      // Get all advances in the date range for better performance
-      const allAdvances = await advanceService.getAdvancesByDateRange(startDate, endDate);
-      
-      // Group advances by tripId for efficient lookup
-      const advancesByTrip = {};
-      allAdvances.forEach(advance => {
-        const tripId = advance.tripId;
-        if (tripId && tripId !== '') {
-          if (!advancesByTrip[tripId]) {
-            advancesByTrip[tripId] = [];
-          }
-          advancesByTrip[tripId].push(advance);
-        }
-      });
+  useEffect(() => {
+    load();
+  }, [load]);
 
-      // Load advances for each trip using SIMPLIFIED approach - same as AddAdvanceForm.js
-      const tripsWithAdvances = trips.map((trip) => {
-        try {
-          const advances = advancesByTrip[trip.id] || [];
-          
-          // Use centralized calculation utility
-          const advanceCalc = calculateAdvanceTotals(advances);
-          
-          // If the trip has an advanceAmount but no initial advance records,
-          // create a synthetic initial advance from the trip's advanceAmount
-          let initialTotal = advanceCalc.initial;
-          let initialAdvances = advanceCalc.initialAdvances;
-          
-          if (trip.advanceAmount > 0 && initialTotal === 0) {
-            // Create a synthetic initial advance from the trip's advanceAmount
-            initialTotal = trip.advanceAmount || 0;
-            initialAdvances = [{
-              id: `trip-${trip.id}`,
-              tripId: trip.id,
-              vehicleNumber: trip.vehicleNumber,
-              tripDate: trip.date,
-              advanceAmount: trip.advanceAmount,
-              advanceType: 'initial',
-              note: 'Initial advance from trip record',
-              createdAt: trip.createdAt || new Date()
-            }];
-          }
-          
-          // Calculate the new total including the trip's advanceAmount
-          const grandTotal = initialTotal + advanceCalc.additional;
-          
-          console.log(`Trip ${trip.id}: Found ${advances.length} advances, initial: ${initialTotal}, additional: ${advanceCalc.additional}, total: ${grandTotal}`);
-          
-          return {
-            ...trip,
-            advances: advances,
-            initialAdvances: initialAdvances,
-            additionalAdvances: advanceCalc.additionalAdvances,
-            initialTotal: initialTotal,
-            additionalTotal: advanceCalc.additional,
-            totalAdvances: grandTotal,
-            advanceCount: advanceCalc.count + (initialAdvances.length > 0 ? 1 : 0)
-          };
-        } catch (error) {
-          console.error(`Error loading advances for trip ${trip.id}:`, error);
-          return {
-            ...trip,
-            advances: [],
-            initialAdvances: [],
-            additionalAdvances: [],
-            initialTotal: trip.advanceAmount || 0, // Use trip's advanceAmount as fallback
-            additionalTotal: 0,
-            totalAdvances: trip.advanceAmount || 0, // Use trip's advanceAmount as fallback
-            advanceCount: trip.advanceAmount > 0 ? 1 : 0
-          };
-        }
-      });
-      
-      const summary = calculateSummary(tripsWithAdvances);
-      
-      // Create synthetic initial advances from trip records that don't have advance records
-      const syntheticAdvances = tripsWithAdvances
-        .filter(trip => trip.advanceAmount > 0 && trip.initialTotal === trip.advanceAmount)
-        .map(trip => ({
+  /* ------------------------------------------------------------------ join */
+
+  // One pass to index advances by trip, then one pass over trips. The synthetic
+  // "initial advance" stands in for trips whose opening advance was recorded on
+  // the trip itself rather than as its own document.
+  const joined = useMemo(() => {
+    const byTrip = new Map();
+    for (const advance of advances) {
+      if (!advance.tripId) continue;
+      const bucket = byTrip.get(advance.tripId);
+      if (bucket) bucket.push(advance);
+      else byTrip.set(advance.tripId, [advance]);
+    }
+
+    const synthetic = [];
+
+    const enriched = trips.map((trip) => {
+      const own = byTrip.get(trip.id) || [];
+
+      let initialList = own.filter((item) => item.advanceType === 'initial');
+      const additionalList = own.filter(
+        (item) => item.advanceType === 'additional' || (!item.advanceType && item.tripId)
+      );
+
+      const sum = (list) => list.reduce((total, item) => total + (Number(item.advanceAmount) || 0), 0);
+      let initialTotal = sum(initialList);
+      const additionalTotal = sum(additionalList);
+
+      if (Number(trip.advanceAmount) > 0 && initialTotal === 0) {
+        const stand_in = {
           id: `trip-${trip.id}`,
           tripId: trip.id,
           vehicleNumber: trip.vehicleNumber,
           tripDate: trip.date,
-          advanceAmount: trip.advanceAmount,
+          advanceAmount: Number(trip.advanceAmount) || 0,
           advanceType: 'initial',
-          note: 'Initial advance from trip record',
-          createdAt: trip.createdAt || new Date()
-        }));
-      
-      // Combine real advances with synthetic advances
-      const combinedAdvances = [...allAdvances, ...syntheticAdvances];
-      
-      setData({
-        trips: tripsWithAdvances,
-        advances: combinedAdvances,
-        summary: summary
-      });
-      
-    } catch (error) {
-      console.error('Error loading report data:', error);
-      showToastMessage('Error loading report data');
-    } finally {
-      setLoading(false);
-    }
-  }, [filters]);
-
-  const prepareCsvData = useCallback((trips) => {
-    const csvRows = trips.map(trip => ({
-      'SL Number': trip.slNumber,
-      'Date': formatDate(trip.date),
-      'Vehicle Number': trip.vehicleNumber,
-      'Vehicle Type': trip.vehicleType || 'lorry',
-      'STR Number': trip.strNumber,
-      'STR Status': trip.strStatus || 'not received',
-      'Villages': trip.villages?.join('; ') || '',
-      'Quantity': trip.quantity || 0,
-      'Driver Name': trip.driverName || '',
-      'Mobile Number': trip.mobileNumber || '',
-      'Initial Advances Total': trip.initialTotal || 0,
-      'Initial Advances Count': trip.initialAdvances?.length || 0,
-      'Additional Advances Total': trip.additionalTotal || 0,
-      'Additional Advances Count': trip.additionalAdvances?.length || 0,
-      'Grand Total Advances': trip.totalAdvances || 0,
-      'Total Advance Records': trip.advanceCount || 0
-    }));
-    setCsvData(csvRows);
-  }, []);
-
-  const calculateSummary = (trips) => {
-    const totalTrips = trips.length;
-    const totalAdvances = trips.reduce((sum, trip) => sum + (trip.totalAdvances || 0), 0);
-    const totalQuantity = trips.reduce((sum, trip) => sum + (trip.quantity || 0), 0);
-    const uniqueVehicles = new Set(trips.map(trip => trip.vehicleNumber)).size;
-    const avgAdvancePerTrip = totalTrips > 0 ? totalAdvances / totalTrips : 0;
-    
-    return {
-      totalTrips,
-      totalAdvances,
-      totalQuantity,
-      uniqueVehicles,
-      avgAdvancePerTrip
-    };
-  };
-
-  useEffect(() => {
-    loadInitialData();
-  }, [loadInitialData]);
-
-  useEffect(() => {
-    loadReportData();
-  }, [loadReportData]);
-
-  // Prepare CSV data whenever trips data changes
-  useEffect(() => {
-    if (data.trips.length > 0) {
-      prepareCsvData(data.trips);
-    }
-  }, [data.trips, prepareCsvData]);
-
-  const handleFilterChange = (field, value) => {
-    setFilters(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  const setQuickDateFilter = (type) => {
-    const today = new Date();
-    let dateFrom, dateTo;
-    
-    switch (type) {
-      case 'today':
-        dateFrom = dateTo = format(today, 'yyyy-MM-dd');
-        break;
-      case 'week':
-        dateFrom = format(subDays(today, 7), 'yyyy-MM-dd');
-        dateTo = format(today, 'yyyy-MM-dd');
-        break;
-      case 'month':
-        dateFrom = format(startOfMonth(today), 'yyyy-MM-dd');
-        dateTo = format(endOfMonth(today), 'yyyy-MM-dd');
-        break;
-      case 'year':
-        dateFrom = format(startOfYear(today), 'yyyy-MM-dd');
-        dateTo = format(endOfYear(today), 'yyyy-MM-dd');
-        break;
-      default:
-        return;
-    }
-    
-    setFilters(prev => ({
-      ...prev,
-      dateFrom,
-      dateTo
-    }));
-  };
-
-  const clearFilters = () => {
-    setFilters({
-      dateFrom: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
-      dateTo: format(endOfMonth(new Date()), 'yyyy-MM-dd'),
-      vehicleNumber: '',
-      village: ''
-    });
-  };
-
-  // Deep links: /reports?range=today|week|month|year&tab=trips|advances
-  useEffect(() => {
-    const range = searchParams.get('range');
-    if (range) setQuickDateFilter(range);
-
-    const tab = searchParams.get('tab');
-    if (tab === 'trips' || tab === 'advances') setActiveTab(tab);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
-
-  const showToastMessage = (message) => {
-    setToastMessage(message);
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
-  };
-
-  // Edit trip functions
-  const handleEditTrip = (trip) => {
-    setEditingTrip(trip);
-
-    // Safely format the date
-    let formattedDate = '';
-    try {
-      if (trip.date) {
-        const dateObj = trip.date.toDate ? trip.date.toDate() : new Date(trip.date);
-        if (!isNaN(dateObj.getTime())) {
-          formattedDate = format(dateObj, 'yyyy-MM-dd');
-        }
+          note: 'Opening advance recorded on the trip',
+          createdAt: trip.createdAt || trip.date,
+          synthetic: true
+        };
+        initialList = [stand_in];
+        initialTotal = stand_in.advanceAmount;
+        synthetic.push(stand_in);
       }
-    } catch (error) {
-      console.error('Error formatting date:', error);
+
+      return {
+        ...trip,
+        initialAdvances: initialList,
+        additionalAdvances: additionalList,
+        initialTotal,
+        additionalTotal,
+        totalAdvances: initialTotal + additionalTotal,
+        // Every record counted exactly once. The old version added the initial
+        // list length on top of a count that already included it.
+        advanceCount: initialList.length + additionalList.length
+      };
+    });
+
+    return { trips: enriched, advances: [...advances, ...synthetic] };
+  }, [trips, advances]);
+
+  /* ---------------------------------------------------------------- window */
+
+  const win = useMemo(() => resolveWindow(range, custom), [range, custom]);
+
+  const periodTrips = useMemo(
+    () => joined.trips.filter((trip) => inWindow(trip.date, win.from, win.to)),
+    [joined.trips, win]
+  );
+
+  const previousTrips = useMemo(
+    () => joined.trips.filter((trip) => inWindow(trip.date, win.prevFrom, win.prevTo)),
+    [joined.trips, win]
+  );
+
+  const periodAdvances = useMemo(
+    () => joined.advances.filter((item) => inWindow(advanceWhen(item), win.from, win.to)),
+    [joined.advances, win]
+  );
+
+  /* ---------------------------------------------------------------- search */
+
+  // One field instead of the old pair of text inputs, matched against every
+  // field someone would plausibly type. Applied to both tabs, unlike before.
+  const matches = useCallback(
+    (haystack) => {
+      const term = query.trim().toLowerCase();
+      if (!term) return true;
+      return haystack.toLowerCase().includes(term);
+    },
+    [query]
+  );
+
+  const visibleTrips = useMemo(
+    () =>
+      periodTrips.filter((trip) =>
+        matches(
+          `${trip.vehicleNumber || ''} ${trip.driverName || ''} ${(trip.villages || []).join(' ')} ${
+            trip.slNumber ?? ''
+          }`
+        )
+      ),
+    [periodTrips, matches]
+  );
+
+  const visibleAdvances = useMemo(
+    () =>
+      periodAdvances.filter((item) =>
+        matches(`${item.vehicleNumber || ''} ${item.note || ''} ${item.advanceType || ''}`)
+      ),
+    [periodAdvances, matches]
+  );
+
+  /* --------------------------------------------------------------- summary */
+
+  const totals = useMemo(() => {
+    const advance = visibleTrips.reduce((sum, trip) => sum + trip.totalAdvances, 0);
+    const quantity = visibleTrips.reduce((sum, trip) => sum + (Number(trip.quantity) || 0), 0);
+    return {
+      advance,
+      quantity,
+      trips: visibleTrips.length,
+      vehicles: new Set(visibleTrips.map((trip) => trip.vehicleNumber)).size,
+      // Computed by the old page and then never shown. It is the most useful of
+      // the four, so it is on screen now.
+      avgPerTrip: visibleTrips.length ? advance / visibleTrips.length : 0,
+      strDue: visibleTrips.filter((trip) => !isStrReceived(trip)).length
+    };
+  }, [visibleTrips]);
+
+  const previousTotal = useMemo(
+    () => previousTrips.reduce((sum, trip) => sum + measureOf(trip, measure), 0),
+    [previousTrips, measure]
+  );
+
+  const currentTotal = useMemo(
+    () => visibleTrips.reduce((sum, trip) => sum + measureOf(trip, measure), 0),
+    [visibleTrips, measure]
+  );
+
+  // "Sales are up 12%" tells you whether the number is good. The bare number
+  // does not.
+  const delta = useMemo(() => {
+    if (!previousTotal) return null;
+    const change = ((currentTotal - previousTotal) / previousTotal) * 100;
+    if (!Number.isFinite(change)) return null;
+    return { pct: Math.abs(Math.round(change)), up: change >= 0 };
+  }, [currentTotal, previousTotal]);
+
+  /* ----------------------------------------------------------------- chart */
+
+  // A single day would be a one-bar chart, which shows no pattern at all, so the
+  // Day range plots the trailing week for context and says so in the caption.
+  // The chart therefore has its own window, and pulls its own trips for it —
+  // the totals above stay bound to the selected period.
+  const buckets = useMemo(() => {
+    const monthly = range === 'year' || differenceInCalendarDays(win.to, win.from) > 62;
+    const from = range === 'today' ? startOfDay(subDays(win.to, 6)) : win.from;
+
+    const slots = monthly
+      ? eachMonthOfInterval({ start: from, end: win.to })
+      : eachDayOfInterval({ start: from, end: win.to });
+
+    const keyOf = (date) => (monthly ? format(date, 'yyyy-MM') : format(date, 'yyyy-MM-dd'));
+
+    const source = joined.trips.filter(
+      (trip) =>
+        inWindow(trip.date, from, win.to) &&
+        matches(
+          `${trip.vehicleNumber || ''} ${trip.driverName || ''} ${(trip.villages || []).join(' ')} ${
+            trip.slNumber ?? ''
+          }`
+        )
+    );
+
+    const tally = new Map();
+    for (const trip of source) {
+      const when = toDate(trip.date);
+      if (!when) continue;
+      const key = keyOf(when);
+      tally.set(key, (tally.get(key) || 0) + measureOf(trip, measure));
     }
 
-    setEditFormData({
-      slNumber: trip.slNumber,
-      date: formattedDate,
-      vehicleNumber: trip.vehicleNumber,
-      strNumber: trip.strNumber,
+    const unit = measure === 'advance' ? '' : measure === 'trips' ? 'trips' : 'units';
+
+    return {
+      monthly,
+      caption: monthly
+        ? `${format(from, 'MMM yyyy')} – ${format(win.to, 'MMM yyyy')}`
+        : range === 'today'
+        ? 'Last 7 days'
+        : `${format(from, 'd MMM')} – ${format(win.to, 'd MMM')}`,
+      points: slots.map((date) => {
+        const key = keyOf(date);
+        const value = tally.get(key) || 0;
+        const longLabel = monthly ? format(date, 'MMMM yyyy') : format(date, 'd MMMM');
+        const spoken =
+          measure === 'advance' ? formatINR(value) : `${value} ${unit}`.trim();
+
+        return {
+          key,
+          value,
+          label: longLabel,
+          shortLabel: monthly ? format(date, 'MMM') : format(date, 'd'),
+          // Date first, words spelled out, axis names left out — VoiceOver
+          // guidance from the same session.
+          a11yLabel: `${longLabel}, ${spoken}`
+        };
+      })
+    };
+  }, [joined.trips, matches, win, range, measure]);
+
+  const selectedPoint = buckets.points.find((point) => point.key === selectedBar) || null;
+
+  // Judged on the chart's own window, not the selected period. The Day range
+  // plots a trailing week, so "no trips today" must not blank out a week that
+  // does have data.
+  const chartHasData = buckets.points.some((point) => point.value > 0);
+
+  // Selecting a bar in one measure and switching measure would leave a readout
+  // describing the wrong thing.
+  useEffect(() => setSelectedBar(null), [measure, range, query]);
+
+  /* ------------------------------------------------------- vehicle split */
+
+  const byVehicle = useMemo(() => {
+    const tally = new Map();
+    for (const trip of visibleTrips) {
+      const key = trip.vehicleNumber || 'Unknown';
+      const entry = tally.get(key) || { vehicleNumber: key, value: 0, trips: 0, driverName: trip.driverName };
+      entry.value += measureOf(trip, measure);
+      entry.trips += 1;
+      tally.set(key, entry);
+    }
+
+    const rows = [...tally.values()].sort((a, b) => b.value - a.value);
+    const top = rows[0]?.value || 0;
+    return rows.slice(0, 5).map((row) => ({ ...row, share: top ? (row.value / top) * 100 : 0 }));
+  }, [visibleTrips, measure]);
+
+  /* ------------------------------------------------------------ formatting */
+
+  const formatMeasure = useCallback(
+    (value) => {
+      if (measure === 'advance') return formatINR(value);
+      if (measure === 'trips') return `${value} ${value === 1 ? 'trip' : 'trips'}`;
+      return `${Number(value.toFixed(2))}`;
+    },
+    [measure]
+  );
+
+  const formatAxis = useCallback(
+    (value) => (measure === 'advance' ? formatCompactINR(value) : String(Math.round(value))),
+    [measure]
+  );
+
+  const measureHeadline = measure === 'advance' ? formatINR(currentTotal) : formatMeasure(currentTotal);
+  const measureName =
+    measure === 'advance' ? 'Advance' : measure === 'trips' ? 'Trips' : 'Quantity';
+
+  const rangeLabel = useMemo(() => {
+    if (range === 'today') return format(win.from, 'd MMMM yyyy');
+    if (range === 'year') return format(win.from, 'yyyy');
+    if (range === 'month') return format(win.from, 'MMMM yyyy');
+    return `${format(win.from, 'd MMM')} – ${format(win.to, 'd MMM yyyy')}`;
+  }, [range, win]);
+
+  const dateText = (value) => {
+    const date = toDate(value);
+    return date ? format(date, 'd MMM yyyy') : '—';
+  };
+
+  /* ------------------------------------------------------------ edit / del */
+
+  const openEdit = (trip) => {
+    const when = toDate(trip.date);
+    setDraft({
+      slNumber: trip.slNumber ?? '',
+      date: when ? iso(when) : '',
+      vehicleNumber: trip.vehicleNumber || '',
+      // Bound to strStatus, and saved to both fields. The old modal wrote a
+      // status string into strNumber, so editing it changed nothing visible and
+      // corrupted the number.
+      strStatus: isStrReceived(trip) ? 'Received' : 'not received',
       vehicleType: trip.vehicleType || 'lorry',
       villages: trip.villages || [],
-      quantity: trip.quantity,
-      driverName: trip.driverName,
-      mobileNumber: trip.mobileNumber,
-      advanceAmount: trip.advanceAmount || 0
+      quantity: trip.quantity ?? '',
+      driverName: trip.driverName || '',
+      mobileNumber: trip.mobileNumber || '',
+      advanceAmount: trip.advanceAmount ?? ''
     });
-    setEditErrors({});
-    setShowEditModal(true);
+    setErrors({});
   };
 
-  const handleDeleteTrip = async (trip) => {
-    if (!window.confirm(`Are you sure you want to delete Trip #${trip.slNumber} (${trip.vehicleNumber})? This action cannot be undone.`)) {
+  const validate = (values) => {
+    const next = {};
+    if (!String(values.vehicleNumber).trim()) next.vehicleNumber = 'Vehicle number is required';
+    if (!values.date) next.date = 'Date is required';
+    if (!values.villages.length) next.villages = 'Add at least one village';
+    if (!values.quantity || parseFloat(values.quantity) <= 0) next.quantity = 'Enter a quantity';
+    if (!String(values.driverName).trim()) next.driverName = 'Driver name is required';
+    if (!String(values.mobileNumber).trim()) next.mobileNumber = 'Mobile number is required';
+    else if (!/^[6-9]\d{9}$/.test(String(values.mobileNumber)))
+      next.mobileNumber = 'Enter a valid 10-digit mobile number';
+    if (values.advanceAmount !== '' && parseFloat(values.advanceAmount) < 0)
+      next.advanceAmount = 'Advance cannot be negative';
+
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
+
+  const saveEdit = async () => {
+    if (!detailTrip || !draft) return;
+    if (!validate(draft)) {
+      toast.error('Check the highlighted fields');
       return;
     }
 
+    setSaving(true);
     try {
-      await tripService.deleteTrip(trip.id);
-      showToastMessage('Trip deleted successfully!');
-      loadReportData(); // Refresh the data
-    } catch (error) {
-      console.error('Error deleting trip:', error);
-      showToastMessage('Error deleting trip. Please try again.');
-    }
-  };
+      const nextAdvance = parseFloat(draft.advanceAmount) || 0;
+      const previousAdvance = Number(detailTrip.advanceAmount) || 0;
+      const difference = nextAdvance - previousAdvance;
+      const when = parseLocalDate(draft.date) || new Date();
 
-  const handleEditInputChange = (field, value) => {
-    setEditFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-    
-    // Clear error when user starts typing
-    if (editErrors[field]) {
-      setEditErrors(prev => ({
-        ...prev,
-        [field]: null
-      }));
-    }
-  };
+      await tripService.updateTrip(detailTrip.id, {
+        slNumber: parseInt(draft.slNumber, 10) || detailTrip.slNumber || 0,
+        date: when,
+        vehicleNumber: String(draft.vehicleNumber).trim().toUpperCase(),
+        vehicleType: draft.vehicleType,
+        // Written together, because isStrReceived() reads either field.
+        strStatus: draft.strStatus,
+        strNumber: draft.strStatus,
+        villages: draft.villages,
+        quantity: parseFloat(draft.quantity),
+        driverName: String(draft.driverName).trim(),
+        mobileNumber: String(draft.mobileNumber).trim(),
+        advanceAmount: nextAdvance
+      });
 
-  const removeEditVillage = (villageToRemove) => {
-    setEditFormData(prev => ({
-      ...prev,
-      villages: prev.villages.filter(village => village !== villageToRemove)
-    }));
-  };
-
-  const validateEditForm = () => {
-    const newErrors = {};
-    
-    if (!editFormData.vehicleNumber.trim()) {
-      newErrors.vehicleNumber = 'Vehicle number is required';
-    }
-    
-    if (!editFormData.strNumber.trim()) {
-      newErrors.strNumber = 'STR number is required';
-    }
-    
-    if (editFormData.villages.length === 0) {
-      newErrors.villages = 'At least one village is required';
-    }
-    
-    if (!editFormData.quantity || parseFloat(editFormData.quantity) <= 0) {
-      newErrors.quantity = 'Valid quantity is required';
-    }
-    
-    if (!editFormData.driverName.trim()) {
-      newErrors.driverName = 'Driver name is required';
-    }
-    
-    if (!editFormData.mobileNumber.trim()) {
-      newErrors.mobileNumber = 'Mobile number is required';
-    } else if (!/^[6-9]\d{9}$/.test(editFormData.mobileNumber)) {
-      newErrors.mobileNumber = 'Valid 10-digit mobile number is required';
-    }
-    
-    if (editFormData.advanceAmount && parseFloat(editFormData.advanceAmount) < 0) {
-      newErrors.advanceAmount = 'Advance amount cannot be negative';
-    }
-    
-    setEditErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleEditSubmit = async () => {
-    if (!validateEditForm()) {
-      showToastMessage('Please fix the errors and try again');
-      return;
-    }
-    
-    setEditLoading(true);
-    
-    try {
-      const newAdvanceAmount = parseFloat(editFormData.advanceAmount) || 0;
-      const originalAdvanceAmount = editingTrip.advanceAmount || 0;
-      const advanceDifference = newAdvanceAmount - originalAdvanceAmount;
-      
-      const updateData = {
-        slNumber: parseInt(editFormData.slNumber),
-        date: new Date(editFormData.date),
-        vehicleNumber: editFormData.vehicleNumber.trim(),
-        strNumber: editFormData.strNumber.trim(),
-        vehicleType: editFormData.vehicleType,
-        villages: editFormData.villages,
-        quantity: parseFloat(editFormData.quantity),
-        driverName: editFormData.driverName.trim(),
-        mobileNumber: editFormData.mobileNumber.trim(),
-        advanceAmount: newAdvanceAmount
-      };
-      
-      await tripService.updateTrip(editingTrip.id, updateData);
-      
-      // If the advance amount was increased, create an additional advance record for the difference
-      if (advanceDifference > 0) {
+      if (difference > 0) {
         await advanceService.addAdvance({
-          tripId: editingTrip.id,
-          vehicleNumber: editFormData.vehicleNumber.trim(),
-          tripDate: new Date(editFormData.date),
-          advanceAmount: advanceDifference,
+          tripId: detailTrip.id,
+          vehicleNumber: String(draft.vehicleNumber).trim().toUpperCase(),
+          tripDate: when,
+          advanceAmount: difference,
           advanceType: 'additional',
-          note: `Additional advance from trip edit (${formatCurrency(originalAdvanceAmount)} → ${formatCurrency(newAdvanceAmount)})`,
+          note: `Top-up from a trip edit (${formatINR(previousAdvance)} → ${formatINR(nextAdvance)})`,
           createdAt: new Date()
         });
+      } else if (difference < 0) {
+        // The old page created nothing here, so the ledger drifted from the
+        // trip's own figure with no trace. Say so instead of hiding it.
+        toast('Advance reduced on the trip. The advance ledger was left unchanged.');
       }
-      
-      // Update vehicle information if changed
-      const existingVehicle = vehicles.find(v => v.vehicleNumber === editFormData.vehicleNumber);
-      if (!existingVehicle ||
-          existingVehicle.driverName !== editFormData.driverName ||
-          existingVehicle.mobileNumber !== editFormData.mobileNumber) {
+
+      const known = vehicles.find((item) => item.vehicleNumber === draft.vehicleNumber);
+      if (
+        !known ||
+        known.driverName !== draft.driverName ||
+        known.mobileNumber !== draft.mobileNumber
+      ) {
         await vehicleService.addVehicle({
-          vehicleNumber: editFormData.vehicleNumber,
-          driverName: editFormData.driverName,
-          mobileNumber: editFormData.mobileNumber,
+          vehicleNumber: String(draft.vehicleNumber).trim().toUpperCase(),
+          driverName: String(draft.driverName).trim(),
+          mobileNumber: String(draft.mobileNumber).trim(),
+          vehicleType: draft.vehicleType,
           isActive: true
         });
       }
-      
-      showToastMessage('Trip updated successfully!');
-      setShowEditModal(false);
-      
-      // Refresh the report data
-      loadReportData();
-      
+
+      toast.success(`Trip #${draft.slNumber || detailTrip.slNumber} updated`);
+      setDraft(null);
+      setDetailTrip(null);
+      await load();
     } catch (error) {
       console.error('Error updating trip:', error);
-      showToastMessage('Error updating trip. Please try again.');
+      toast.error(error?.message || 'Could not update the trip');
     } finally {
-      setEditLoading(false);
+      setSaving(false);
     }
   };
 
-  const formatDate = (date) => {
-    if (!date) return '';
-    const dateObj = date.toDate ? date.toDate() : new Date(date);
-    return format(dateObj, 'MMM dd, yyyy');
+  const confirmDelete = async () => {
+    const trip = pendingDelete;
+    if (!trip) return;
+
+    try {
+      await tripService.deleteTrip(trip.id);
+      toast.success(`Trip #${trip.slNumber ?? ''} deleted`.replace('# ', ''));
+      setDetailTrip(null);
+      await load();
+    } catch (error) {
+      console.error('Error deleting trip:', error);
+      toast.error(error?.message || 'Could not delete the trip');
+    } finally {
+      setPendingDelete(null);
+    }
   };
 
-  const formatCurrency = (amount) => {
-    return utilFormatCurrency(amount);
+  /* ------------------------------------------------------------------- csv */
+
+  // Same 16 columns as before — this is the one thing on the old screen that was
+  // genuinely complete. Derived, so it can never go stale like the old
+  // effect-populated copy did when the trip list emptied.
+  const csv = useMemo(() => {
+    const rows = visibleTrips.map((trip) => ({
+      'SL Number': trip.slNumber ?? '',
+      Date: dateText(trip.date),
+      'Vehicle Number': trip.vehicleNumber || '',
+      'Vehicle Type': trip.vehicleType || 'lorry',
+      'STR Number': trip.strNumber || '',
+      'STR Status': isStrReceived(trip) ? 'Received' : 'not received',
+      Villages: (trip.villages || []).join('; '),
+      Quantity: trip.quantity || 0,
+      'Driver Name': trip.driverName || '',
+      'Mobile Number': trip.mobileNumber || '',
+      'Initial Advances Total': trip.initialTotal || 0,
+      'Initial Advances Count': trip.initialAdvances.length,
+      'Additional Advances Total': trip.additionalTotal || 0,
+      'Additional Advances Count': trip.additionalAdvances.length,
+      'Grand Total Advances': trip.totalAdvances || 0,
+      'Total Advance Records': trip.advanceCount || 0
+    }));
+
+    return {
+      rows,
+      headers: Object.keys(rows[0] || {}).map((key) => ({ label: key, key })),
+      filename: `SuhelRoadlines_${iso(win.from)}_to_${iso(win.to)}.csv`
+    };
+  }, [visibleTrips, win]);
+
+  const villageOptions = useMemo(() => {
+    const names = new Set(villages.map((village) => village.villageName).filter(Boolean));
+    for (const name of draft?.villages || []) names.add(name);
+    return [...names].sort().map((name) => ({ value: name, label: name }));
+  }, [villages, draft]);
+
+  const addVillage = async (name) => {
+    setDraft((prev) => ({ ...prev, villages: [...prev.villages, name] }));
+    try {
+      const created = await villageService.addVillage({ villageName: name, isActive: true, usageCount: 1 });
+      setVillages((prev) => [...prev, created]);
+    } catch (error) {
+      console.error('Error adding village:', error);
+    }
   };
 
-  const csvHeaders = [
-    { label: 'SL Number', key: 'SL Number' },
-    { label: 'Date', key: 'Date' },
-    { label: 'Vehicle Number', key: 'Vehicle Number' },
-    { label: 'Vehicle Type', key: 'Vehicle Type' },
-    { label: 'STR Number', key: 'STR Number' },
-    { label: 'STR Status', key: 'STR Status' },
-    { label: 'Villages', key: 'Villages' },
-    { label: 'Quantity', key: 'Quantity' },
-    { label: 'Driver Name', key: 'Driver Name' },
-    { label: 'Mobile Number', key: 'Mobile Number' },
-    { label: 'Initial Advances Total', key: 'Initial Advances Total' },
-    { label: 'Initial Advances Count', key: 'Initial Advances Count' },
-    { label: 'Additional Advances Total', key: 'Additional Advances Total' },
-    { label: 'Additional Advances Count', key: 'Additional Advances Count' },
-    { label: 'Grand Total Advances', key: 'Grand Total Advances' },
-    { label: 'Total Advance Records', key: 'Total Advance Records' }
-  ];
+  /* ----------------------------------------------------------------- render */
 
-  const csvFilename = `SuhelRoadline_Report_${filters.dateFrom}_to_${filters.dateTo}.csv`;
+  if (loading) {
+    return (
+      <div className="rep">
+        <div className="rep__skeleton">
+          <Skeleton height={40} radius="var(--r-capsule)" />
+          <Skeleton height={188} radius="var(--r-lg)" />
+          <Skeleton height={96} radius="var(--r-lg)" />
+          <Skeleton height={220} radius="var(--r-lg)" />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="reports-page">
-      <div className="page-header">
-        <h1 className="page-title">Reports & Analytics</h1>
-        <p className="page-subtitle">Comprehensive insights into your travel operations</p>
+    <div className="rep">
+      {/* 1 — range. Scopes every number below, so nothing above it. */}
+      <div className="rep__toolbar">
+        {/* The Custom segment only exists once a custom window is in play.
+            Segmented has no "nothing selected" state, so without this the pill
+            would sit on Day and claim the wrong period. */}
+        <Segmented
+          options={range === 'custom' ? [...RANGES, { value: 'custom', label: 'Custom' }] : RANGES}
+          value={range}
+          onChange={setRange}
+          ariaLabel="Reporting period"
+        />
+
+        <button
+          type="button"
+          className="rep__range"
+          onClick={() => setRangeSheet(true)}
+          aria-haspopup="dialog"
+          aria-expanded={rangeSheet}
+          aria-label={`Period, ${rangeLabel}. Change`}
+        >
+          <CalendarIcon size={15} />
+          <span>{rangeLabel}</span>
+          <ChevronDownIcon size={13} className="rep__range-chevron" />
+        </button>
       </div>
 
-      {/* Filters */}
-      <div className="filters-section">
-        <div className="filters-header">
-          <h2>Filters</h2>
-          <div className="filter-actions">
-            <button onClick={clearFilters} className="btn btn-ghost btn-sm">
-              Clear All
-            </button>
-            <CSVLink
-              data={csvData}
-              headers={csvHeaders}
-              filename={csvFilename}
-              className="btn btn-primary btn-sm"
-              onClick={() => showToastMessage('Report exported successfully!')}
-            >
-              <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7,10 12,15 17,10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
-              </svg>
-              Export CSV
-            </CSVLink>
-          </div>
-        </div>
-        
-        {/* Quick Filters */}
-        <div className="quick-filters">
-          <button 
-            className="quick-filter-btn"
-            onClick={() => setQuickDateFilter('today')}
-          >
-            Today
-          </button>
-          <button 
-            className="quick-filter-btn"
-            onClick={() => setQuickDateFilter('week')}
-          >
-            Last 7 Days
-          </button>
-          <button 
-            className="quick-filter-btn"
-            onClick={() => setQuickDateFilter('month')}
-          >
-            This Month
-          </button>
-          <button 
-            className="quick-filter-btn"
-            onClick={() => setQuickDateFilter('year')}
-          >
-            This Year
-          </button>
-        </div>
-        
-        {/* Filter Form */}
-        <div className="filter-form">
-          <div className="filter-row">
-            <div className="form-group">
-              <label className="form-label">From Date</label>
-              <input
-                type="date"
-                value={filters.dateFrom}
-                onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
-                className="form-input"
-              />
-            </div>
-            
-            <div className="form-group">
-              <label className="form-label">To Date</label>
-              <input
-                type="date"
-                value={filters.dateTo}
-                onChange={(e) => handleFilterChange('dateTo', e.target.value)}
-                className="form-input"
-              />
-            </div>
-          </div>
-          
-          <div className="filter-row">
-            <div className="form-group">
-              <label className="form-label">Vehicle Number</label>
-              <input
-                type="text"
-                value={filters.vehicleNumber}
-                onChange={(e) => handleFilterChange('vehicleNumber', e.target.value)}
-                placeholder="Filter by vehicle number"
-                className="form-input"
-              />
-            </div>
-            
-            <div className="form-group">
-              <label className="form-label">Village</label>
-              <input
-                type="text"
-                value={filters.village}
-                onChange={(e) => handleFilterChange('village', e.target.value)}
-                placeholder="Filter by village name"
-                className="form-input"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Summary */}
-      <div className="summary-section">
-        <div className="summary-grid">
-          <div className="summary-card">
-            <div className="summary-icon">
-              <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M7 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path>
-                <path d="M17 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path>
-                <path d="M5 17h-2v-4m-1 -8h11a2 2 0 0 1 2 2v8"></path>
-              </svg>
-            </div>
-            <div className="summary-value">{data.summary.totalTrips}</div>
-            <div className="summary-label">Total Trips</div>
-          </div>
-          
-          <div className="summary-card">
-            <div className="summary-icon">
-              <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <line x1="12" y1="1" x2="12" y2="23"></line>
-                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-              </svg>
-            </div>
-            <div className="summary-value">{formatCurrency(data.summary.totalAdvances)}</div>
-            <div className="summary-label">Total Advances</div>
-          </div>
-          
-          <div className="summary-card">
-            <div className="summary-icon">
-              <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-              </svg>
-            </div>
-            <div className="summary-value">{data.summary.totalQuantity}</div>
-            <div className="summary-label">Total Quantity</div>
-          </div>
-          
-          <div className="summary-card">
-            <div className="summary-icon">
-              <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M7 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path>
-                <path d="M17 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path>
-                <path d="M5 17h-2v-4m-1 -8h11a2 2 0 0 1 2 2v8"></path>
-              </svg>
-            </div>
-            <div className="summary-value">{data.summary.uniqueVehicles}</div>
-            <div className="summary-label">Unique Vehicles</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Data Tabs */}
-      <div className="data-section">
-        <div className="tab-header">
-          <div className="tab-buttons">
-            <button 
-              className={`tab-btn ${activeTab === 'trips' ? 'active' : ''}`}
-              onClick={() => setActiveTab('trips')}
-            >
-              Trips ({data.trips.length})
-            </button>
-            <button 
-              className={`tab-btn ${activeTab === 'advances' ? 'active' : ''}`}
-              onClick={() => setActiveTab('advances')}
-            >
-              Advances ({data.advances.length})
-            </button>
-          </div>
-        </div>
-        
-        <div className="tab-content">
-          {loading ? (
-            <div className="loading-state">
-              <div className="loading"></div>
-              <p>Loading data...</p>
-            </div>
-          ) : activeTab === 'trips' ? (
-            <div className="trips-table-container">
-              {data.trips.length === 0 ? (
-                <div className="empty-state">
-                  <svg className="icon-xl" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2z"></path>
-                    <line x1="8" y1="1" x2="8" y2="4"></line>
-                    <line x1="16" y1="1" x2="16" y2="4"></line>
-                  </svg>
-                  <h3>No trips found</h3>
-                  <p>Try adjusting your filters to see more results</p>
-                </div>
-              ) : (
-                <div className="table-responsive">
-                  <table className="trips-table">
-                    <thead>
-                      <tr>
-                        <th className="col-sl">SL</th>
-                        <th className="col-date">Date</th>
-                        <th className="col-vehicle">Vehicle</th>
-                        <th className="col-type">Type</th>
-                        <th className="col-str">STR Status</th>
-                        <th className="col-villages">Villages</th>
-                        <th className="col-quantity">Quantity</th>
-                        <th className="col-driver">Driver</th>
-                        <th className="col-advances">Advances</th>
-                        <th className="col-actions">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.trips.map((trip) => (
-                        <tr key={trip.id}>
-                          <td className="col-sl">
-                            <span className="sl-number">#{trip.slNumber}</span>
-                          </td>
-                          <td className="col-date">{formatDate(trip.date)}</td>
-                          <td className="col-vehicle">
-                            <div className="vehicle-info">
-                              <span className="vehicle-number">{trip.vehicleNumber}</span>
-                              {trip.driverName && (
-                                <span className="driver-name">• {trip.driverName}</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="col-type">{trip.vehicleType || 'lorry'}</td>
-                          <td className="col-str">
-                            <span className={`str-status-badge ${trip.strStatus === 'Received' ? 'received' : 'not-received'}`}>
-                              {trip.strStatus || 'not received'}
-                            </span>
-                          </td>
-                          <td className="col-villages">
-                            <div className="villages-cell">
-                              {trip.villages?.map((village, index) => (
-                                <span key={index} className="village-chip">{village}</span>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="col-quantity">{trip.quantity || '-'}</td>
-                          <td className="col-driver">{trip.driverName || '-'}</td>
-                          <td className="col-advances">
-                            <div className="advances-info">
-                              <span className="advance-amount">{formatCurrency(trip.advanceAmount || 0)}</span>
-                              {trip.advanceCount > 0 && (
-                                <span className="advance-count">({trip.advanceCount})</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="col-actions">
-                            <div className="row-actions">
-                              <button
-                                className="btn-icon edit-trip-btn"
-                                onClick={() => handleEditTrip(trip)}
-                                title="Edit Trip"
-                              >
-                                <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                                </svg>
-                              </button>
-                              <button
-                                className="btn-icon delete-trip-btn"
-                                onClick={() => handleDeleteTrip(trip)}
-                                title="Delete Trip"
-                              >
-                                <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                  <path d="M3 6h18"></path>
-                                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 0 2 2v2"></path>
-                                  <line x1="10" y1="11" x2="10" y2="17"></line>
-                                  <line x1="14" y1="11" x2="14" y2="17"></line>
-                                </svg>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="advances-list">
-              {data.advances.length === 0 ? (
-                <div className="empty-state">
-                  <svg className="icon-xl" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <line x1="12" y1="1" x2="12" y2="23"></line>
-                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                  </svg>
-                  <h3>No advances found</h3>
-                  <p>Try adjusting your filters to see more results</p>
-                </div>
-              ) : (
-                data.advances.map((advance) => (
-                  <div key={advance.id} className="advance-item">
-                    <div className="advance-header">
-                      <div className="advance-info">
-                        <span className="advance-vehicle">{advance.vehicleNumber}</span>
-                        <span className="advance-amount">{formatCurrency(advance.advanceAmount)}</span>
-                        <span className={`advance-type-badge ${advance.advanceType || 'additional'}`}>
-                          {advance.advanceType === 'initial' ? 'Initial' : 'Additional'}
-                        </span>
-                      </div>
-                      <span className="advance-date">{formatDate(advance.createdAt)}</span>
-                    </div>
-                    <div className="advance-details">
-                      <div className="detail-row">
-                        <span className="detail-label">Trip Date:</span>
-                        <span className="detail-value">{formatDate(advance.tripDate)}</span>
-                      </div>
-                      {advance.note && (
-                        <div className="detail-row">
-                          <span className="detail-label">Note:</span>
-                          <span className="detail-value">{advance.note}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+      {/* 2 — the take-away, in words and one concrete number, with a comparison
+             so the number means something on its own. */}
+      <Card className="rep__hero">
+        <div className="rep__hero-head">
+          <span className="rep__hero-label">
+            {measureName} · {rangeLabel}
+          </span>
+          {delta && (
+            <Badge tone={delta.up ? 'success' : 'danger'}>
+              {delta.up ? '▲' : '▼'} {delta.pct}% vs {win.comparisonLabel}
+            </Badge>
           )}
         </div>
-      </div>
 
-      {/* Edit Trip Modal */}
-      {showEditModal && (
-        <div className="modal-overlay">
-          <div className="modal-container">
-            <div className="modal-header">
-              <h2 className="modal-title">Edit Trip</h2>
-              <button
-                className="modal-close"
-                onClick={() => setShowEditModal(false)}
-              >
-                <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-              </button>
-            </div>
-            
-            <div className="modal-body">
-              <div className="form-group">
-                <label className="form-label">SL Number</label>
-                <input
-                  type="text"
-                  value={editFormData.slNumber}
-                  onChange={(e) => handleEditInputChange('slNumber', e.target.value)}
-                  className={`form-input ${editErrors.slNumber ? 'error' : ''}`}
-                />
-                {editErrors.slNumber && <span className="error-text">{editErrors.slNumber}</span>}
-              </div>
+        <span className="rep__hero-value">{measureHeadline}</span>
 
-              <div className="form-group">
-                <label className="form-label">Date</label>
-                <input
-                  type="date"
-                  value={editFormData.date}
-                  onChange={(e) => handleEditInputChange('date', e.target.value)}
-                  className={`form-input ${editErrors.date ? 'error' : ''}`}
-                />
-                {editErrors.date && <span className="error-text">{editErrors.date}</span>}
-              </div>
+        {/* Doubles as the chart's value readout: selecting a bar replaces the
+            summary line rather than floating a tooltip over the bars. */}
+        <p className="rep__hero-note" aria-live="polite">
+          {totals.trips === 0
+            ? 'No trips in this period.'
+            : selectedPoint
+            ? `${selectedPoint.label}: ${formatMeasure(selectedPoint.value)}`
+            : `Across ${totals.trips} ${totals.trips === 1 ? 'trip' : 'trips'} and ${
+                totals.vehicles
+              } ${totals.vehicles === 1 ? 'vehicle' : 'vehicles'}.`}
+        </p>
 
-              <div className="form-group">
-                <label className="form-label">Vehicle Number</label>
-                <input
-                  type="text"
-                  value={editFormData.vehicleNumber}
-                  onChange={(e) => handleEditInputChange('vehicleNumber', e.target.value)}
-                  className={`form-input ${editErrors.vehicleNumber ? 'error' : ''}`}
-                />
-                {editErrors.vehicleNumber && <span className="error-text">{editErrors.vehicleNumber}</span>}
-              </div>
+        {/* 3 — the chart. One measure at a time: three questions on one set of
+               axes would answer none of them clearly. */}
+        <Segmented
+          options={MEASURES}
+          value={measure}
+          onChange={setMeasure}
+          ariaLabel="Measure"
+          className="rep__measures"
+        />
 
-              <div className="form-group">
-                <label className="form-label">Vehicle Type</label>
-                <select
-                  value={editFormData.vehicleType}
-                  onChange={(e) => handleEditInputChange('vehicleType', e.target.value)}
-                  className={`form-input ${editErrors.vehicleType ? 'error' : ''}`}
-                >
-                  <option value="lorry">Lorry</option>
-                  <option value="tempo">Tempo</option>
-                  <option value="pickup">Pickup</option>
-                </select>
-                {editErrors.vehicleType && <span className="error-text">{editErrors.vehicleType}</span>}
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">STR Status</label>
-                <select
-                  value={editFormData.strNumber}
-                  onChange={(e) => handleEditInputChange('strNumber', e.target.value)}
-                  className={`form-input ${editErrors.strNumber ? 'error' : ''}`}
-                >
-                  <option value="not received">Not Received</option>
-                  <option value="Received">Received</option>
-                </select>
-                {editErrors.strNumber && <span className="error-text">{editErrors.strNumber}</span>}
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Villages</label>
-                <div className="villages-container">
-                  {editFormData.villages.length > 0 && (
-                    <div className="selected-villages">
-                      {editFormData.villages.map((village, index) => (
-                        <span key={index} className="village-chip">
-                          {village}
-                          <button
-                            type="button"
-                            onClick={() => removeEditVillage(village)}
-                            className="remove-chip"
-                          >
-                            <svg className="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                              <line x1="18" y1="6" x2="6" y2="18"></line>
-                              <line x1="6" y1="6" x2="18" y2="18"></line>
-                            </svg>
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {editFormData.villages.length === 0 && (
-                    <span className="no-villages">No villages selected</span>
-                  )}
-                </div>
-                {editErrors.villages && <span className="error-text">{editErrors.villages}</span>}
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Quantity</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={editFormData.quantity}
-                  onChange={(e) => handleEditInputChange('quantity', e.target.value)}
-                  className={`form-input ${editErrors.quantity ? 'error' : ''}`}
-                />
-                {editErrors.quantity && <span className="error-text">{editErrors.quantity}</span>}
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Driver Name</label>
-                <input
-                  type="text"
-                  value={editFormData.driverName}
-                  onChange={(e) => handleEditInputChange('driverName', e.target.value)}
-                  className={`form-input ${editErrors.driverName ? 'error' : ''}`}
-                />
-                {editErrors.driverName && <span className="error-text">{editErrors.driverName}</span>}
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Mobile Number</label>
-                <input
-                  type="tel"
-                  value={editFormData.mobileNumber}
-                  onChange={(e) => handleEditInputChange('mobileNumber', e.target.value)}
-                  className={`form-input ${editErrors.mobileNumber ? 'error' : ''}`}
-                />
-                {editErrors.mobileNumber && <span className="error-text">{editErrors.mobileNumber}</span>}
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Advance Amount (₹)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={editFormData.advanceAmount}
-                  onChange={(e) => handleEditInputChange('advanceAmount', e.target.value)}
-                  className={`form-input ${editErrors.advanceAmount ? 'error' : ''}`}
-                />
-                {editErrors.advanceAmount && <span className="error-text">{editErrors.advanceAmount}</span>}
-              </div>
-            </div>
-            
-            <div className="modal-footer">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setShowEditModal(false)}
-                disabled={editLoading}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleEditSubmit}
-                disabled={editLoading}
-              >
-                {editLoading ? (
-                  <>
-                    <div className="loading"></div>
-                    Updating...
-                  </>
-                ) : (
-                  'Update Trip'
-                )}
-              </button>
-            </div>
+        {!chartHasData ? (
+          <div className="rep__chart-empty">
+            <ChartIcon size={22} />
+            <span>Nothing to plot in {buckets.caption}</span>
           </div>
-        </div>
+        ) : (
+          <>
+            <BarChart
+              points={buckets.points}
+              formatValue={formatMeasure}
+              formatAxis={formatAxis}
+              selectedKey={selectedBar}
+              onSelect={(point) => setSelectedBar(point?.key ?? null)}
+              ariaLabel={`${measureName} by ${buckets.monthly ? 'month' : 'day'}, ${buckets.caption}`}
+              height={170}
+            />
+            <span className="rep__chart-caption">{buckets.caption}</span>
+          </>
+        )}
+      </Card>
+
+      {/* 4 — secondary magnitudes. Deliberately below the chart: useful, but not
+             what the screen is about. */}
+      <Card className="rep__stats">
+        <Stat value={totals.trips} label="Trips" />
+        <span className="rep__stats-divider" aria-hidden="true" />
+        <Stat value={Number(totals.quantity.toFixed(2))} label="Quantity" />
+        <span className="rep__stats-divider" aria-hidden="true" />
+        <Stat value={formatCompactINR(totals.avgPerTrip)} label="Avg / trip" />
+        <span className="rep__stats-divider" aria-hidden="true" />
+        <Stat
+          value={totals.strDue}
+          label="STR due"
+          tone={totals.strDue ? 'danger' : 'success'}
+          dot
+        />
+      </Card>
+
+      {/* 5 — which vehicles, not how many. A count is a dead end; a ranking is
+             something you can act on. */}
+      {byVehicle.length > 0 && (
+        <section className="rep__block">
+          <SectionHeader title={`Top vehicles by ${measureName.toLowerCase()}`} />
+          <ListSection inset={false} className="stg26">
+            {byVehicle.map((row) => (
+              <ListRow
+                key={row.vehicleNumber}
+                icon={<TruckIcon size={17} />}
+                iconTone="brand"
+                title={row.vehicleNumber}
+                subtitle={`${row.trips} ${row.trips === 1 ? 'trip' : 'trips'}`}
+                value={formatMeasure(row.value)}
+              >
+                {/* The bar is redundant with the number on purpose: proportion is
+                    read instantly, the exact figure is not. */}
+                <span className="rep__vehicle-track" aria-hidden="true">
+                  <span className="rep__vehicle-fill" style={{ width: `${row.share}%` }} />
+                </span>
+              </ListRow>
+            ))}
+          </ListSection>
+        </section>
       )}
 
-      <Toast opened={showToast} text={toastMessage} onToastClosed={() => setShowToast(false)} />
+      {/* 6 — the records. Rows, not a ten-column table: the old one hid three
+             columns below 640px, which is an admission it never fitted. */}
+      <section className="rep__block">
+        <div className="rep__records-head">
+          <Segmented
+            options={TABS.map((item) => ({
+              ...item,
+              count: item.value === 'trips' ? visibleTrips.length : visibleAdvances.length
+            }))}
+            value={tab}
+            onChange={setTab}
+            ariaLabel="Records"
+          />
+          <SearchField
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Vehicle, driver, village or SL"
+          />
+        </div>
+
+        {tab === 'trips' ? (
+          visibleTrips.length === 0 ? (
+            <Card padded={false}>
+              <EmptyState
+                icon={<TruckIcon size={26} />}
+                title="No trips here"
+                message={
+                  query
+                    ? `Nothing matched “${query.trim()}”.`
+                    : 'Try a wider period from the control above.'
+                }
+                action={
+                  query ? (
+                    <Button variant="tinted" onClick={() => setQuery('')}>
+                      Clear search
+                    </Button>
+                  ) : null
+                }
+              />
+            </Card>
+          ) : (
+            <ListSection
+              inset={false}
+              className="stg26"
+              footer="Tap a trip for its full record, or to edit or delete it."
+              key={`trips-${range}-${tab}`}
+            >
+              {visibleTrips.map((trip) => {
+                const received = isStrReceived(trip);
+                return (
+                  <ListRow
+                    key={trip.id}
+                    icon={received ? <DocCheckIcon size={17} /> : <DocAlertIcon size={17} />}
+                    iconTone={received ? 'success' : 'danger'}
+                    title={trip.vehicleNumber}
+                    subtitle={`#${trip.slNumber ?? '—'} · ${trip.driverName || 'No driver'}`}
+                    detail={`${dateText(trip.date)}${
+                      trip.villages?.length ? ` · ${trip.villages.join(', ')}` : ''
+                    }`}
+                    value={formatINR(trip.totalAdvances)}
+                    chevron
+                    onClick={() => setDetailTrip(trip)}
+                  />
+                );
+              })}
+            </ListSection>
+          )
+        ) : visibleAdvances.length === 0 ? (
+          <Card padded={false}>
+            <EmptyState
+              icon={<WalletIcon size={26} />}
+              title="No advances here"
+              message="Nothing was advanced in this period."
+            />
+          </Card>
+        ) : (
+          <ListSection inset={false} className="stg26" key={`adv-${range}-${tab}`}>
+            {visibleAdvances.map((item) => (
+              <ListRow
+                key={item.id}
+                icon={<WalletIcon size={17} />}
+                iconTone={item.advanceType === 'initial' ? 'accent' : 'brand'}
+                title={item.vehicleNumber || '—'}
+                subtitle={item.advanceType === 'initial' ? 'Opening advance' : 'Top-up'}
+                detail={`${dateText(advanceWhen(item))}${item.note ? ` · ${item.note}` : ''}`}
+                value={formatINR(item.advanceAmount)}
+              />
+            ))}
+          </ListSection>
+        )}
+      </section>
+
+      {/* 7 — export. Terminal action, so it closes the screen rather than
+             sitting in a filter card at the top as it used to. */}
+      <ListSection inset={false} className="rep__export">
+        <ListRow
+          as="div"
+          icon={<TrendUpIcon size={17} />}
+          iconTone="accent"
+          title={
+            <CSVLink
+              data={csv.rows}
+              headers={csv.headers}
+              filename={csv.filename}
+              className="rep__export-link"
+              onClick={() => {
+                if (!csv.rows.length) {
+                  toast.error('Nothing to export in this period');
+                  return false;
+                }
+                toast.success(`Exported ${csv.rows.length} trips`);
+                return true;
+              }}
+            >
+              Export {csv.rows.length} {csv.rows.length === 1 ? 'trip' : 'trips'} as CSV
+            </CSVLink>
+          }
+        />
+      </ListSection>
+
+      {/* ------------------------------- overlays ------------------------------- */}
+
+      <Sheet
+        open={rangeSheet}
+        onClose={() => setRangeSheet(false)}
+        title="Custom period"
+        primaryAction={
+          <Button variant="plain" onClick={() => setRangeSheet(false)}>
+            Done
+          </Button>
+        }
+        secondaryAction={
+          <Button
+            variant="plain"
+            onClick={() => {
+              setRange('month');
+              setRangeSheet(false);
+            }}
+          >
+            Reset
+          </Button>
+        }
+      >
+        <ListSection inset={false} footer="Choosing dates here switches the period to Custom.">
+          <ListRow>
+            <DateField
+              label="From"
+              layout="row"
+              value={custom.from}
+              onChange={(event) => {
+                setCustom((prev) => ({ ...prev, from: event.target.value }));
+                setRange('custom');
+              }}
+            />
+          </ListRow>
+          <ListRow>
+            <DateField
+              label="To"
+              layout="row"
+              value={custom.to}
+              onChange={(event) => {
+                setCustom((prev) => ({ ...prev, to: event.target.value }));
+                setRange('custom');
+              }}
+            />
+          </ListRow>
+        </ListSection>
+      </Sheet>
+
+      {/* Trip detail. Everything the old table crammed into ten columns, at a
+          size you can actually read, with the two actions at the bottom. */}
+      <Sheet
+        open={Boolean(detailTrip) && !draft}
+        onClose={() => setDetailTrip(null)}
+        title={detailTrip?.vehicleNumber || 'Trip'}
+        subtitle={detailTrip ? `#${detailTrip.slNumber ?? '—'} · ${dateText(detailTrip.date)}` : ''}
+        detent="large"
+        primaryAction={
+          <Button variant="plain" onClick={() => openEdit(detailTrip)}>
+            Edit
+          </Button>
+        }
+      >
+        {detailTrip && (
+          <>
+            <Card className="rep__detail-hero">
+              <span className="rep__detail-label">Total advance</span>
+              <span className="rep__detail-value">{formatINR(detailTrip.totalAdvances)}</span>
+              <Badge tone={isStrReceived(detailTrip) ? 'success' : 'danger'} dot>
+                {isStrReceived(detailTrip) ? 'STR received' : 'STR due'}
+              </Badge>
+            </Card>
+
+            <ListSection inset={false} header="Trip">
+              <ListRow title="Date" value={dateText(detailTrip.date)} />
+              <ListRow title="Vehicle" value={detailTrip.vehicleNumber || '—'} />
+              <ListRow title="Type" value={detailTrip.vehicleType || 'lorry'} />
+              <ListRow title="Quantity" value={String(detailTrip.quantity ?? '—')} />
+              <ListRow title="Villages" value={(detailTrip.villages || []).join(', ') || '—'} />
+            </ListSection>
+
+            <ListSection inset={false} header="Driver">
+              <ListRow title="Name" value={detailTrip.driverName || '—'} />
+              <ListRow title="Mobile" value={detailTrip.mobileNumber || '—'} />
+            </ListSection>
+
+            <ListSection
+              inset={false}
+              header="Advances"
+              footer={`${detailTrip.advanceCount} ${
+                detailTrip.advanceCount === 1 ? 'record' : 'records'
+              } in total.`}
+            >
+              <ListRow
+                title="Opening"
+                subtitle={`${detailTrip.initialAdvances.length} ${
+                  detailTrip.initialAdvances.length === 1 ? 'record' : 'records'
+                }`}
+                value={formatINR(detailTrip.initialTotal)}
+              />
+              <ListRow
+                title="Top-ups"
+                subtitle={`${detailTrip.additionalAdvances.length} ${
+                  detailTrip.additionalAdvances.length === 1 ? 'record' : 'records'
+                }`}
+                value={formatINR(detailTrip.additionalTotal)}
+              />
+            </ListSection>
+
+            <ListSection inset={false}>
+              <ListRow
+                title="Delete trip"
+                destructive
+                onClick={() => setPendingDelete(detailTrip)}
+              />
+            </ListSection>
+          </>
+        )}
+      </Sheet>
+
+      {/* Edit. A sheet carries its own Save, because the nav bar is behind it. */}
+      <Sheet
+        open={Boolean(draft)}
+        onClose={() => setDraft(null)}
+        title="Edit trip"
+        detent="large"
+        secondaryAction={
+          <Button variant="plain" onClick={() => setDraft(null)}>
+            Cancel
+          </Button>
+        }
+        primaryAction={
+          <Button variant="plain" loading={saving} onClick={saveEdit}>
+            Save
+          </Button>
+        }
+      >
+        {draft && (
+          <>
+            <ListSection
+              inset={false}
+              header="Trip"
+              footer={errors.vehicleNumber || errors.date || errors.villages}
+            >
+              <ListRow>
+                <NumberField
+                  label="SL"
+                  layout="row"
+                  value={draft.slNumber}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, slNumber: event.target.value }))}
+                />
+              </ListRow>
+              <ListRow>
+                <DateField
+                  label="Date"
+                  layout="row"
+                  value={draft.date}
+                  error={errors.date}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, date: event.target.value }))}
+                />
+              </ListRow>
+              <ListRow>
+                <TextField
+                  label="Vehicle"
+                  layout="row"
+                  value={draft.vehicleNumber}
+                  error={errors.vehicleNumber}
+                  onChange={(event) =>
+                    setDraft((prev) => ({ ...prev, vehicleNumber: event.target.value.toUpperCase() }))
+                  }
+                />
+              </ListRow>
+              <ListRow>
+                <Picker
+                  label="Type"
+                  layout="row"
+                  value={draft.vehicleType}
+                  options={TYPE_OPTIONS}
+                  onChange={(value) => setDraft((prev) => ({ ...prev, vehicleType: value }))}
+                />
+              </ListRow>
+              <ListRow>
+                <Picker
+                  label="STR"
+                  layout="row"
+                  value={draft.strStatus}
+                  options={STR_OPTIONS}
+                  onChange={(value) => setDraft((prev) => ({ ...prev, strStatus: value }))}
+                />
+              </ListRow>
+              <ListRow>
+                {/* Multi-select with create, so villages can be added back. The
+                    old modal could only remove them, and validation then
+                    refused to submit with none left. */}
+                <Picker
+                  label="Villages"
+                  layout="row"
+                  multiple
+                  searchable
+                  value={draft.villages}
+                  options={villageOptions}
+                  onChange={(value) => setDraft((prev) => ({ ...prev, villages: value }))}
+                  onCreate={addVillage}
+                  createLabel="Add"
+                  error={errors.villages}
+                />
+              </ListRow>
+              <ListRow>
+                <NumberField
+                  label="Quantity"
+                  layout="row"
+                  value={draft.quantity}
+                  error={errors.quantity}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, quantity: event.target.value }))}
+                />
+              </ListRow>
+            </ListSection>
+
+            <ListSection
+              inset={false}
+              header="Driver"
+              footer={errors.driverName || errors.mobileNumber}
+            >
+              <ListRow>
+                <TextField
+                  label="Name"
+                  layout="row"
+                  value={draft.driverName}
+                  error={errors.driverName}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, driverName: event.target.value }))}
+                />
+              </ListRow>
+              <ListRow>
+                <PhoneField
+                  label="Mobile"
+                  layout="row"
+                  value={draft.mobileNumber}
+                  error={errors.mobileNumber}
+                  onChange={(event) =>
+                    setDraft((prev) => ({ ...prev, mobileNumber: event.target.value }))
+                  }
+                />
+              </ListRow>
+            </ListSection>
+
+            <ListSection
+              inset={false}
+              header="Advance"
+              footer={
+                errors.advanceAmount ||
+                'Raising this records a top-up for the difference. Lowering it does not remove one.'
+              }
+            >
+              <ListRow>
+                <CurrencyField
+                  label="Opening advance"
+                  layout="row"
+                  value={draft.advanceAmount}
+                  error={errors.advanceAmount}
+                  onChange={(event) =>
+                    setDraft((prev) => ({ ...prev, advanceAmount: event.target.value }))
+                  }
+                />
+              </ListRow>
+            </ListSection>
+          </>
+        )}
+      </Sheet>
+
+      <Alert
+        open={Boolean(pendingDelete)}
+        onClose={() => setPendingDelete(null)}
+        title="Delete this trip?"
+        message={`Trip #${pendingDelete?.slNumber ?? ''} for ${
+          pendingDelete?.vehicleNumber ?? ''
+        } will be removed. Its advance records stay on file. This cannot be undone.`}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 };

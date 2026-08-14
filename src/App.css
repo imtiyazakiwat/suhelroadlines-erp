@@ -1,6 +1,0 @@
-/* Legacy design sheet, still referenced by the screens that have not been
-   migrated to src/ui yet (Reports, Settings, STR Status, Add Advance,
-   Add Entry). It is imported before styles/ios26.css so the new token layer
-   wins on anything they both declare. Delete this file once those five
-   screens are converted. */
-@import './styles/ios-design-system.css';

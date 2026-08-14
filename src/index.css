@@ -1,5 +1,29 @@
 /* Suhel Roadlines — global base */
 
+/* These three used to live in styles/ios-design-system.css, which was deleted
+   once Reports came off it. Everything in src/ui sizes with border-box and
+   assumes headings carry no UA margin, so they belong here rather than in a
+   sheet tied to the old screens. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+}
+
 html,
 body {
   margin: 0;

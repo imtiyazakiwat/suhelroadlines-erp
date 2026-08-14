@@ -13,6 +13,7 @@ export {
 } from './Field';
 export { default as Picker } from './Picker';
 export { default as Segmented } from './Segmented';
+export { default as BarChart, niceCeil } from './Chart';
 export { default as ListSection, ListRow, ListLink } from './List';
 export {
   default as Card,

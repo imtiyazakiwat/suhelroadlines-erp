@@ -52,7 +52,7 @@ rewrite, and the `villageService.updateVillage` / `deleteVillage` additions.
 | Add Advance | `AddAdvance/AddAdvance.js` | Done |
 | Settings | `Settings/SettingsPage.js` | Done, uncommitted |
 | — | all of the above | reworked again: action bars moved to the nav bar, §3 |
-| **Reports** | `Reports/ReportsPage.js` | **Not started** — 1024 JS / 1235 CSS lines, still on the legacy sheet |
+| Reports | `Reports/ReportsPage.js` | Done — rebuilt on the design system, §3a |
 
 ### Routing
 
@@ -85,14 +85,17 @@ radii, safe-area vars, elevation, **two glass material recipes**, spring
 easings, z-layer scale. Includes dark mode plus
 `prefers-reduced-transparency` / `-contrast` / `-motion` overrides.
 
-**Import order in `App.js` is load-bearing:**
+`App.js` imports one token layer now:
 
 ```js
-import './App.css';        // legacy sheet — un-migrated screens (Reports only, now)
-import './styles/ios26.css'; // must be LAST so new tokens win
+import './styles/ios26.css';
 ```
 
-Reversing these makes the whole design system invisible. That was a real bug.
+`App.css` and `styles/ios-design-system.css` are **deleted** — Reports was the
+last screen on them. Their two load-bearing globals, the universal
+`box-sizing: border-box` and the `h1..h6 { margin: 0 }` reset, moved to
+`src/index.css`; everything in `src/ui` assumes both. Deleting that sheet without
+moving those first breaks every layout in the app.
 
 ### Glass — `src/ui/glass/`
 
@@ -127,11 +130,12 @@ it filters *content* rather than backdrop and is size-capped in Safari.
 | `Segmented.js` | Sliding-pill segmented control, optional per-option `count` |
 | `List.js` | `ListSection` (header/footer/inset), `ListRow`, `ListLink`. **The table replacement** |
 | `Display.js` | `Card`, `SectionHeader`, `Badge`, `Chip`, `Switch`, `EmptyState`, `Skeleton`, `Divider`, `Stat` |
+| `Chart.js` | `BarChart`, `niceCeil`. The only chart primitive — see §3a |
 | `overlay/` | `Sheet`, `ActionSheet`, `Alert`, `ToastProvider` + `useToast`, `useOverlay` |
 | `chrome/` | `NavBar` (takes an optional `subtitle`), `NavButton`, `NavSearchButton`, `BackButton`, `useScrolled`, `TabBar`, `DockButton` |
 | `motion/` | `RouteTransition`, `Stagger`, `Appear` |
 
-Class prefixes: `btn26`, `fld`, `pkr26`, `seg26`, `lst26`, `card26`, `bdg26`,
+Class prefixes: `btn26`, `fld`, `pkr26`, `seg26`, `lst26`, `card26`, `bdg26`, `cht26`,
 `chp26`, `swt26`, `sht26`, `act26`, `alr26`, `tst26`, `nav26`, `tab26`,
 `dock26`, `rt26`, `stg26`, `glass`.
 
@@ -159,6 +163,63 @@ Outgoing layer is `position: absolute` + `pointer-events: none` +
 `.lst26__card`. Reduced Motion swaps all travel for cross-fades.
 
 ---
+
+### 3a. Reports and the chart primitive
+
+Grounded in WWDC22 [Design an effective
+chart](https://developer.apple.com/videos/play/wwdc2022/110340/) and *Design app
+experiences with charts*. The reasoning matters more than the markup:
+
+- **Bars, not lines or points.** Trip data is sparse — plenty of days have no
+  trips. Points make the pattern unreadable and a line over-emphasises the
+  segments bridging the gaps. Bars keep zero days visible without turning them
+  into a distraction, and cumulative visual weight matches the period total.
+- **Dynamic upper bound, lower bound pinned to 0**, like Health's step count, so
+  a bar twice as tall is twice the value. `niceCeil` picks a step from
+  1/1.5/2/2.5/3/4/5/6/7.5/10 × 10ⁿ so labels stay round *and* the tallest bar
+  fills at least two thirds of the height. The narrower 1/2/2.5/5/10 set rounded
+  11,000 up to 20,000 and wasted half the plot.
+- **~4 grid lines.** Two (floor and ceiling) leave the middle unreadable; seven
+  is noise.
+- **Full-height hit targets.** Each column is a real `<button>` spanning the whole
+  plot height, so a short bar and the space above it are equally tappable. Arrow
+  keys move the selection, Escape clears it — same experience for keyboard, Voice
+  Control and Switch Control.
+- **One accessibility element per data point**, labelled contextualising-value
+  first, words spelled out: `"14 August, ₹8,000"`. Axis names are omitted because
+  the group label already carries them.
+- **The description does the work.** The hero states the take-away as a sentence
+  plus one concrete number, compared against the real previous calendar period
+  ("▲ 120% vs last month"), so the figure means something read on its own.
+- **Selecting a bar rewrites the summary line** rather than floating a tooltip
+  over the bars. Nothing is ever occluded, and it doubles as the `aria-live`
+  announcement.
+- Colour never carries meaning alone: selection is opacity plus the readout.
+
+Screen order, and why each sits where it does: range control (scopes everything
+below) → take-away card with the chart inside it → stat row (secondary
+magnitudes) → **top vehicles by measure** (a ranking you can act on, replacing
+the old dead "unique vehicles: 4") → records with a Trips/Advances segmented and
+one search field → Export CSV as a closing row.
+
+The chart has **its own window**, captioned. The Day range plots the trailing
+seven days, because a one-bar chart shows no pattern; the totals above stay bound
+to the selected period. Chart emptiness is judged on the chart's window, not the
+period.
+
+`BarChart` is HTML, not SVG: percentage heights mean nothing is measured, resize
+costs no JavaScript, and growth/stagger are plain CSS transitions that collapse
+to a cross-fade under Reduce Motion via the `--dur-*` tokens.
+
+**Cost.** Trips, advances, vehicles and villages are read **once per mount** from
+the fastSync cache; range, measure and search are all `useMemo` over that —
+O(T+A) to join once, then O(T) per keystroke with no network. The old page
+refetched both collections on every keystroke of its two text filters and ran the
+advance join twice per load.
+
+One naming trap fixed: the chart measure is labelled **"Trip count"**, not
+"Trips", because the records section already has a Trips tab and two controls
+sharing an accessible name is ambiguous.
 
 ### Edit sessions — `src/components/Layout/`
 
@@ -307,7 +368,20 @@ instead of three separate queries.
    rather than trusting the file:
    `curl -s localhost:3000/static/js/bundle.js | grep -c <projectId>` → 0 means
    restart. Fixing this is what made `isFirebaseAvailable` true again.
-10. STR's date-range chip was 32px tall — under the 44pt minimum. It now expands
+10. **Reports, from the old implementation.** All fixed in the rebuild, none to
+    be reintroduced: the STR `<select>` was bound to `strNumber`, so editing "STR
+    Status" corrupted the STR number and changed nothing the table displayed; the
+    Advances column rendered `advanceAmount` while the summary card and the CSV
+    used `totalAdvances`, so the row and the total disagreed; `advanceCount`
+    double-counted whenever a real initial advance existed; villages could only be
+    removed in the edit modal, never added, and validation then refused to submit;
+    the Advances tab ignored the vehicle and village filters; trips were filtered
+    on `date` but advances on `createdAt`, so a late-logged advance silently left
+    the totals; `new Date('yyyy-MM-dd')` parsed as UTC and shifted the start
+    boundary a day in IST; `csvData` was never cleared when the trip list emptied,
+    so the export went stale; and `avgAdvancePerTrip` was computed but never
+    rendered.
+11. STR's date-range chip was 32px tall — under the 44pt minimum. It now expands
     its hit area with `::after { inset: -5px -6px }` rather than growing the
     chip, and carries a chevron so it reads as opening something.
 
@@ -315,25 +389,11 @@ instead of three separate queries.
 
 ## 6. Outstanding work
 
-### Next: Reports — `src/components/Reports/ReportsPage.js`
+### Next: delete the orphans
 
-The last screen on the legacy sheet. Model it on Health/Stocks:
-
-- Segmented range control (Today / Week / Month / Year), already wired to
-  `?range=`
-- Hero summary as `Stat` tiles in a glass grid (trips, quantity, advance, avg)
-- `Segmented` for Trips vs Advances, wired to `?tab=`
-- **Replace the `<table>`** with `ListSection` / `ListRow` + a detail `Sheet`
-- Edit-trip modal → `Sheet`; delete `window.confirm` (line ~346) → `Alert`
-- `CSVLink` renders an `<a>` — restyle as a `Button`
-- Two token bugs in its CSS: `--card-gradient` (should be `--gradient-card`)
-  and `--f7-theme-color` (undefined; Framework7 CSS is never loaded)
-
-### Then: cleanup
-
-Delete `src/styles/ios-design-system.css` and the `App.css` import once Reports
-no longer needs them. Delete these orphans (all dead, none in the build graph —
-they're the only reason eslint still reports errors):
+Every screen is on the design system and the legacy sheet is gone, so what
+remains is dead code. These are all unreachable, none is in the build graph, and
+they are the only reason eslint still reports errors:
 
 ```
 Layout/SimpleLayout.js + .css      Dashboard/Dashboard.js
@@ -344,8 +404,16 @@ Settings/VillageList.js + .css     (orphaned by the Settings rewrite)
 src/assets/css/framework7-bundle.css  (~20k lines, imported nowhere)
 ```
 
-Then drop `framework7`, `framework7-react`, `framework7-icons`,
+`Common/Toast.js` + `.css` can go with them: the legacy Toast is imported only by
+orphans now, and every live screen uses `useToast`.
+
+Then drop `framework7`, `framework7-react`, `framework7-icons` and
 `skeleton-elements` from `package.json`.
+
+`src/App.test.js` is untouched Create React App boilerplate asserting a "learn
+react" link this app has never had. It has failed since the initial commit and is
+the only reason `npm test` comes back red. Delete it or replace it with a real
+test.
 
 ### Then: final verification
 
