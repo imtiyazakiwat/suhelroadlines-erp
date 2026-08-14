@@ -18,6 +18,14 @@ import {
   useToast
 } from '../../ui';
 import useCommitAction from '../Layout/useCommitAction';
+import {
+  normaliseVehicleNumber,
+  normaliseVillageName,
+  suggestVillageCode,
+  titleCase,
+  mobileError,
+  sameText
+} from '../../services/textService';
 import { TruckIcon } from '../Common/Icons';
 import './AddEntryForm.css';
 
@@ -108,7 +116,11 @@ const AddEntryForm = () => {
       allVillages.map((village) => ({
         value: village.villageName,
         label: village.villageName,
-        subtitle: `Used ${village.usageCount || 0} times`
+        // The code is what appears on the paperwork, so it is worth showing here
+        // and it makes the picker searchable by either.
+        subtitle: [village.code, `used ${village.usageCount || 0}×`]
+          .filter(Boolean)
+          .join(' · ')
       })),
     [allVillages]
   );
@@ -126,7 +138,7 @@ const AddEntryForm = () => {
   };
 
   const handleVehicleCreate = (vehicleNumber) => {
-    setField('vehicleNumber', vehicleNumber.toUpperCase());
+    setField('vehicleNumber', normaliseVehicleNumber(vehicleNumber));
   };
 
   const handleVillagesChange = (next, option) => {
@@ -138,15 +150,29 @@ const AddEntryForm = () => {
     }
   };
 
-  const handleVillageCreate = async (villageName) => {
-    if (formData.villages.includes(villageName)) return;
+  const handleVillageCreate = async (raw) => {
+    const villageName = normaliseVillageName(raw);
+    if (!villageName) return;
+
+    // Case-insensitive, because "bagalkot" and "Bagalkot" are one village. The
+    // old check was exact-match, which is how the list filled up with
+    // near-duplicates that all showed in the picker.
+    const existing = allVillages.find((item) => sameText(item.villageName, villageName));
+    const canonical = existing?.villageName || villageName;
+
+    if (formData.villages.some((item) => sameText(item, canonical))) return;
 
     // Optimistic: the chip appears immediately, Firestore catches up.
-    setField('villages', [...formData.villages, villageName]);
+    setField('villages', [...formData.villages, canonical]);
+    if (existing) return;
 
     try {
       const created = await villageService.addVillage({
         villageName,
+        code: suggestVillageCode(
+          villageName,
+          allVillages.map((item) => item.code)
+        ),
         isActive: true,
         usageCount: 1
       });
@@ -172,9 +198,11 @@ const AddEntryForm = () => {
     if (formData.villages.length === 0) next.villages = 'Add at least one village';
     if (!formData.driverName.trim()) next.driverName = 'Driver name is required';
 
-    if (!formData.mobileNumber.trim()) next.mobileNumber = 'Mobile number is required';
-    else if (!/^[6-9]\d{9}$/.test(formData.mobileNumber))
-      next.mobileNumber = 'Enter a valid 10-digit mobile number';
+    // Mobile is optional: plenty of trips are booked without one, and refusing
+    // to save the whole trip over a missing phone number blocked real work. A
+    // value that *is* entered still has to be a real number.
+    const mobileProblem = mobileError(formData.mobileNumber);
+    if (mobileProblem) next.mobileNumber = mobileProblem;
 
     if (formData.advanceAmount && parseFloat(formData.advanceAmount) < 0)
       next.advanceAmount = 'Advance cannot be negative';
@@ -200,12 +228,12 @@ const AddEntryForm = () => {
       const tripData = createTripEntry({
         slNumber: parseInt(formData.slNumber, 10),
         date: new Date(formData.date),
-        vehicleNumber: formData.vehicleNumber.trim(),
+        vehicleNumber: normaliseVehicleNumber(formData.vehicleNumber),
         strNumber: formData.strNumber.trim(),
         vehicleType: formData.vehicleType,
         villages: formData.villages,
         quantity: parseFloat(formData.quantity),
-        driverName: formData.driverName.trim(),
+        driverName: titleCase(formData.driverName),
         mobileNumber: formData.mobileNumber.trim(),
         advanceAmount: parseFloat(formData.advanceAmount) || 0
       });
@@ -220,8 +248,8 @@ const AddEntryForm = () => {
         existing.mobileNumber !== formData.mobileNumber
       ) {
         await vehicleService.addVehicle({
-          vehicleNumber: formData.vehicleNumber.trim(),
-          driverName: formData.driverName.trim(),
+          vehicleNumber: normaliseVehicleNumber(formData.vehicleNumber),
+          driverName: titleCase(formData.driverName),
           mobileNumber: formData.mobileNumber.trim(),
           vehicleType: formData.vehicleType,
           isActive: true

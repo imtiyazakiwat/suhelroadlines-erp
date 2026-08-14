@@ -5,6 +5,101 @@ session with no prior chat history.
 
 ---
 
+## 0. How to build in this app — read this before writing any UI
+
+This app is held to Apple's standard, not to "looks modern". Every screen here
+was rebuilt by working from Apple's own guidance and justifying each element.
+Anything added later has to clear the same bar, or the app goes back to feeling
+like a web page wearing an iOS costume.
+
+### The process, in order
+
+1. **Consult the source first.** Find the relevant Apple material before
+   designing: the [Human Interface
+   Guidelines](https://developer.apple.com/design/human-interface-guidelines/),
+   the WWDC design sessions, and the platform behaviour of a first-party app that
+   already solves the problem (Settings, Health, Stocks, Reminders, Wallet,
+   Calendar). Note *what* it says and where. The HIG pages are JS-rendered and
+   often unreadable to a fetcher — search for the guidance, and prefer the WWDC
+   session transcripts, which are plain text and more specific.
+2. **State the screen's job in one sentence.** If you cannot, the screen is doing
+   two jobs and should be two screens.
+3. **For every single element, answer four questions and write the answer down
+   as a comment:**
+   - *Why does this exist?* What question does the user have that this answers?
+   - *Is it needed?* What breaks if it is deleted? "It looks empty otherwise" is
+     not a reason. A number nobody can act on is worse than no number.
+   - *Why here?* Position is an argument about priority. Justify the order.
+   - *What does it cost?* Renders, network calls, complexity, and the attention
+     it takes from whatever it sits next to.
+4. **Choose the form from the data, not from taste.** The Reports chart uses bars
+   because the trip data is sparse and lines over-emphasise the gaps — that is a
+   decision derived from the data shape, and it is the kind of reasoning expected
+   here. Test designs against real and awkward data early: empty, one row,
+   hundreds of rows, missing fields, very long names.
+5. **Justify motion the same way.** Animation must communicate something —
+   direction of travel, that bars are anchored at zero, that a value changed.
+   Decoration that communicates nothing gets cut. All timing comes from the
+   `--dur-*` / `--ease-*` tokens, which collapse under Reduce Motion for free.
+6. **Design the non-visual version at the same time.** For everything shown
+   visually, decide how it reads to VoiceOver and how it works from a keyboard.
+   Not afterwards — the accessible structure usually improves the visual one.
+7. **Verify, then claim.** See §7.
+
+### iOS interaction psychology that keeps coming up
+
+- **Content is the interface.** Chrome floats above content and never
+  permanently covers it. Liquid Glass belongs to the navigation layer only, never
+  to content itself.
+- **Recognition over recall.** Show the options; don't make people remember them.
+  This is why every `<select>` became a `Picker` with searchable options, and why
+  village codes are visible on the rows rather than memorised.
+- **Progressive disclosure.** Show the summary, let people drill in. A phone
+  cannot show ten columns, so a row plus a detail sheet beats a table every time.
+- **Direct manipulation with immediate feedback.** Press states are instant
+  (scale + dim, never a colour change). Optimistic UI where a write is likely to
+  succeed, with an honest failure path — never a success message for something
+  that did not happen.
+- **Recoverability.** Destructive actions confirm; edits can be cancelled; a
+  failed save keeps the user's input. Never lose typed work.
+- **Respect the thumb.** 44pt minimum targets, primary actions within reach,
+  hit areas grown past the paint box rather than inflating the visual control.
+- **Fewer, clearer choices.** Every extra control costs a decision. Four range
+  options beat eight.
+- **Never invent content.** The home screen once advertised "4% diesel cashback"
+  that did not exist. Fake data, fake offers and placeholder metrics are worse
+  than blank space because they teach people to distrust the screen.
+
+### Hard rules, learned the hard way
+
+Each of these came from a real bug in this repo. Breaking one reintroduces it.
+
+- The tab bar owns the bottom edge. **A screen never pins its own action bar
+  there** — contextual actions go to the nav bar via `useCommitAction` (§3).
+- **No `window.confirm` / `window.alert`.** Use `Alert` or `ActionSheet`.
+- Never let an input fall below `--field-font` (16px), or iOS zooms on focus.
+- No `transform` on `:focus` for text inputs — the caret jitters.
+- **Normalise input on the way in, not at save time.** If you uppercase a vehicle
+  number when saving, the screen and the database disagree. See
+  `src/services/textService.js`.
+- **Optional fields must be genuinely optional.** Validate format only when a
+  value is present. A missing phone number must never block a whole trip.
+- Screen CSS is **layout only**; every element comes from `src/ui`.
+- Sheets do not open sheets as a navigation device — push a route instead (§3b).
+- Glass on glass renders flat. Don't nest it.
+- Prefer deriving state with `useMemo` over refetching. Reads happen once per
+  mount; filtering is local.
+
+### Anti-patterns this codebase has already been cured of
+
+Watch for these in anything new: a metric that is computed but never rendered;
+two places showing the same quantity from different fields; a count where a
+ranking would be actionable; a filter that applies to one tab but not its
+sibling; a `<table>` on a phone; refetching on every keystroke; success toasts on
+failed writes; and unreachable UI for a state the data layer filters out.
+
+---
+
 ## 1. What this app is
 
 A React trucking/transport ERP for Suhel Roadlines. Four record types:
@@ -14,7 +109,12 @@ A React trucking/transport ERP for Suhel Roadlines. Four record types:
 | **trip** | `slNumber`, `date`, `vehicleNumber`, `driverName`, `mobileNumber`, `villages[]`, `quantity`, `advanceAmount`, `vehicleType`, `strStatus` / `strNumber` |
 | **vehicle** | doc id **is** `vehicleNumber`; `driverName`, `mobileNumber`, `vehicleType`, `isActive` |
 | **advance** | `vehicleNumber`, `tripId`, `tripDate`, `advanceAmount`, `advanceType` (`initial` \| `additional`), `note`, `isSettled` |
-| **village** | `villageName`, `isActive`, `usageCount`, `lastUsed` |
+| **village** | `villageName`, **`code`**, `isActive`, `usageCount`, `lastUsed` |
+
+`mobileNumber` is **optional** on trips and vehicles. Village `code` is the short
+form used on paperwork; it is uppercase, unique, and suggested from the name.
+**Trips store village *names*, not codes**, so no migration was needed — the code
+is resolved for display from the villages list.
 
 **Data quirk worth knowing:** a trip can carry *both* `strNumber` and
 `strStatus` with the same `'not received'` / `'Received'` values. `strNumber` is
@@ -50,7 +150,7 @@ rewrite, and the `villageService.updateVillage` / `deleteVillage` additions.
 | STR Status | `STRStatus/SimpleSTRStatus.js` | Done |
 | Add Trip | `AddEntry/AddEntryForm.js` | Done |
 | Add Advance | `AddAdvance/AddAdvance.js` | Done |
-| Settings | `Settings/SettingsPage.js` | Done, uncommitted |
+| Settings | `Settings/SettingsPage.js` + `VehiclesPage.js` + `VillagesPage.js` | Done — split into pushed screens, §3b |
 | — | all of the above | reworked again: action bars moved to the nav bar, §3 |
 | Reports | `Reports/ReportsPage.js` | Done — rebuilt on the design system, §3a |
 
@@ -66,7 +166,9 @@ re-export and the real code is in the non-prefixed or `*Page` file.
 | `/` | `SimpleDashboard` |
 | `/str-status` | `SimpleSTRStatus` — honours `?filter=due\|paid\|all` |
 | `/reports` | `SimpleReports` → `ReportsPage` — honours `?range=today\|week\|month\|year` and `?tab=trips\|advances` |
-| `/settings` | `SimpleSettings` → `SettingsPage` |
+| `/settings` | `SimpleSettings` → `SettingsPage` — navigation only |
+| `/settings/vehicles` | `VehiclesPage` — pushed, depth 1 |
+| `/settings/villages` | `VillagesPage` — pushed, depth 1 |
 | `/add-entry` | `SimpleAddEntry` → `AddEntryForm` |
 | `/add-advance` | `SimpleAddAdvance` → `AddAdvance` |
 
@@ -130,7 +232,7 @@ it filters *content* rather than backdrop and is size-capped in Safari.
 | `Segmented.js` | Sliding-pill segmented control, optional per-option `count` |
 | `List.js` | `ListSection` (header/footer/inset), `ListRow`, `ListLink`. **The table replacement** |
 | `Display.js` | `Card`, `SectionHeader`, `Badge`, `Chip`, `Switch`, `EmptyState`, `Skeleton`, `Divider`, `Stat` |
-| `Chart.js` | `BarChart`, `niceCeil`. The only chart primitive — see §3a |
+| `Chart.js` | `BarChart` (plus `compact` trend-platter mode), `niceCeil`. The only chart primitive — §3a |
 | `overlay/` | `Sheet`, `ActionSheet`, `Alert`, `ToastProvider` + `useToast`, `useOverlay` |
 | `chrome/` | `NavBar` (takes an optional `subtitle`), `NavButton`, `NavSearchButton`, `BackButton`, `useScrolled`, `TabBar`, `DockButton` |
 | `motion/` | `RouteTransition`, `Stagger`, `Appear` |
@@ -220,6 +322,57 @@ advance join twice per load.
 One naming trap fixed: the chart measure is labelled **"Trip count"**, not
 "Trips", because the records section already has a Trips tab and two controls
 sharing an accessible name is ambiguous.
+
+**`compact` mode** is the trend-platter treatment used by Health's preview
+charts: no grid, no axis, not interactive, and the whole strip is a single
+labelled `role="img"` rather than one accessibility element per bar — because it
+is a preview of a real chart elsewhere, and a screen reader should not have to
+walk seven values for a decoration. The Home month card uses it.
+
+Home's month card replaced a **"Save on Diesel Expenses — Get 4% Cashback"**
+promo tile. That offer did not exist and nothing was redeemable; it occupied the
+most prominent slot on the app's first screen. The replacement shows the month's
+advance total, the trip count, a delta against last month, and a seven-day
+sparkline, and taps through to `/reports?range=month`. It summarises and drills
+in — the widget contract — rather than trying to analyse on the home screen.
+`homeService.getHomeSummary()` computes it in the pass it already makes, so it
+costs no extra reads. `deltaPct` is `null`, not `0`, when there is no baseline: "0%
+vs last month" would claim a comparison that was never made.
+
+### 3b. Settings, and why sheets stopped nesting
+
+`/settings` is navigation only. Vehicles and villages are managed on **pushed
+routes** — `/settings/vehicles`, `/settings/villages` — registered in
+`ROUTE_DEPTH` at depth 1 so `RouteTransition` pushes them, with titles in
+`AppLayout`'s `TITLES` map so the Back button appears.
+
+It used to open a manager sheet from the Settings list and then an editor sheet
+*from inside that sheet*. Apple's own Settings never does this: Settings > Mail >
+Accounts > Add Account is a navigation stack. Pushing gets a real Back button,
+working browser back, deep links, and one modal layer at a time.
+
+The add action is a row that **closes** the list — the "Add Account" pattern —
+not a floating button and not a nav bar plus.
+
+`vehicleService.getAllVehicles(includeInactive)` and
+`villageService.getAllVillages(includeInactive)` default to hiding inactive
+records, because a picker should only offer things you can dispatch. The
+management screens pass `true`. Before that flag existed, deactivating a vehicle
+made it vanish from Settings as well, and the "Inactive" badge in that list was
+unreachable code.
+
+### Input normalisation — `src/services/textService.js`
+
+Every form goes through it, so all screens behave identically:
+`normaliseVehicleNumber` (uppercase, keeps the separators people type),
+`titleCase` / `normaliseVillageName`, `normaliseVillageCode` (A–Z0–9, max 6),
+`suggestVillageCode` (first three letters, then a numeric suffix to avoid
+collisions), `sameText` (case-insensitive compare), `isValidMobile` /
+`mobileError` (**empty is valid**).
+
+Normalisation happens **as you type**. Correcting silently at save time shows the
+user one value and stores another. Village names are matched case-insensitively,
+which is what stops "bagalkot" and "Bagalkot" both appearing in the picker.
 
 ### Edit sessions — `src/components/Layout/`
 
@@ -381,7 +534,30 @@ instead of three separate queries.
     boundary a day in IST; `csvData` was never cleared when the trip list emptied,
     so the export went stale; and `avgAdvancePerTrip` was computed but never
     rendered.
-11. STR's date-range chip was 32px tall — under the 44pt minimum. It now expands
+11. **Tapping a sheet's header button dismissed the sheet.** This is what "the
+    add buttons are broken" was. The drag-to-dismiss handlers live on
+    `.sht26__grip`, which **wraps the header actions**, and `onPointerUp`
+    dismissed on velocity alone with no minimum distance: ~8px of finger drift
+    over ~15ms is 0.53 px/ms, over the 0.5 threshold. So a tap on Add or Save
+    closed the sheet instead of running the action. Mouse clicks have no drift,
+    which is why it only ever reproduced on touch. Fixed three ways in
+    `Sheet.js`: a press starting on an interactive element is never a drag, a
+    `DRAG_SLOP` floor of 10px must be exceeded before velocity counts, and
+    `setPointerCapture` guarantees `pointerup` arrives (without it a pointer that
+    slid off the grip left the gesture stuck active and the panel frozen mid-drag,
+    which also read as "the button did nothing").
+12. **Stacked overlays fought each other.** Every open overlay put a
+    capture-phase Escape listener on `document`, and `stopPropagation()` does not
+    stop sibling listeners on the same node — so Escape collapsed the whole stack.
+    Each also ran its own focus trap, so a background sheet would pull focus out
+    of the foreground one. And all overlays shared `--z-sheet`, leaving stacking
+    to portal mount order. `useOverlay` now keeps a stack, returns
+    `{ panelRef, depth }`, and gives the topmost overlay exclusive Escape, focus
+    trapping and autofocus; `depth` drives
+    `z-index: calc(var(--z-sheet) + var(--ovl-depth) * 10)` and a lighter,
+    unblurred scrim for nested layers (two full-strength scrims read as ~56%
+    black and stack two backdrop filters).
+13. STR's date-range chip was 32px tall — under the 44pt minimum. It now expands
     its hit area with `::after { inset: -5px -6px }` rather than growing the
     chip, and carries a chevron so it reads as opening something.
 
@@ -414,6 +590,20 @@ Then drop `framework7`, `framework7-react`, `framework7-icons` and
 react" link this app has never had. It has failed since the initial commit and is
 the only reason `npm test` comes back red. Delete it or replace it with a real
 test.
+
+**Testing gotcha that will bite you.** jsdom implements no `PointerEvent`, and
+`fireEvent.pointerDown(node, { clientY })` therefore builds a bare `Event` that
+**silently drops `clientY`**. The handler computes `undefined - undefined`, every
+comparison against `NaN` is false, and a drag test passes whether or not the bug
+is present. Dispatch a `MouseEvent` named `pointerdown` instead:
+
+```js
+fireEvent(node, new MouseEvent('pointerdown', { bubbles: true, clientY: 100 }));
+```
+
+The Sheet suite includes a test asserting the panel's `transform` actually
+follows the pointer, specifically so this failure mode cannot come back
+unnoticed.
 
 ### Then: final verification
 
@@ -453,9 +643,14 @@ STR state is written to `strStatus` **and** `strNumber` together, because
 
 ## 7. Conventions
 
-- **Verify before claiming done:** `npx react-scripts build` must print
-  *Compiled successfully*, and `npx eslint <paths>` must be clean for files in
-  the live tree.
+- **Verify before claiming done:** `npx react-scripts build` must compile, and
+  `npx eslint <paths>` must be clean for files in the live tree. A command
+  exiting 0 is not evidence a feature works — assert the behaviour.
+- **Design decisions belong in comments, next to the code.** Every non-obvious
+  element in this app carries a comment saying why it exists and why it sits
+  where it does, usually citing the Apple guidance behind it. That is the only
+  reason this file could be written, and the only way the next change can respect
+  the last one. Keep doing it.
 - Temporary tests are written as `src/__verify__.test.js`, run with
   `CI=true npx react-scripts test --testPathPattern="__verify__"`, then
   **deleted**. CRA sets `resetMocks: true`, so mock implementations must be

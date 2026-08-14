@@ -63,6 +63,14 @@ const BarChart = ({
   selectedKey = null,
   onSelect,
   ariaLabel = 'Chart',
+  /**
+   * Trend-platter mode, as used by the preview charts in Health: no grid lines,
+   * no axis labels, not interactive. Those charts are a sneak peek of a bigger
+   * one elsewhere, so an impression of the shape is all that is wanted and the
+   * furniture would only be noise. The whole strip is one labelled image
+   * instead of one element per bar.
+   */
+  compact = false,
   className = ''
 }) => {
   const [entered, setEntered] = useState(false);
@@ -127,6 +135,39 @@ const BarChart = ({
 
   const axisFormat = formatAxis || formatValue;
   const empty = max === 0;
+
+  // In compact mode the strip is a single labelled image. One accessibility
+  // element per bar would make a screen reader walk seven unlabelled values for
+  // a decoration, when the card's own number already says what matters.
+  if (compact) {
+    return (
+      <div
+        className={`cht26 cht26--compact ${className}`.trim()}
+        role="img"
+        aria-label={ariaLabel}
+      >
+        <div className="cht26__plot" style={{ height }}>
+          <div className="cht26__columns" aria-hidden="true">
+            {points.map((point, index) => {
+              const value = point.value || 0;
+              const pct = empty ? 0 : Math.max(value > 0 ? 6 : 0, (value / max) * 100);
+              return (
+                <div className="cht26__col" key={point.key}>
+                  <span
+                    className="cht26__bar"
+                    style={{
+                      height: entered ? `${pct}%` : '0%',
+                      transitionDelay: `${Math.min(index, 24) * 12}ms`
+                    }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`cht26 ${className}`.trim()}>

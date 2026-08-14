@@ -20,6 +20,14 @@ import { tripService, vehicleService, advanceService, villageService } from '../
 import { toDate, isStrReceived, formatINR, formatCompactINR } from '../../services/homeService';
 import { VEHICLE_TYPES } from '../../types';
 import {
+  normaliseVehicleNumber,
+  normaliseVillageName,
+  suggestVillageCode,
+  titleCase,
+  mobileError,
+  sameText
+} from '../../services/textService';
+import {
   Button,
   Card,
   SectionHeader,
@@ -579,9 +587,9 @@ const ReportsPage = () => {
     if (!values.villages.length) next.villages = 'Add at least one village';
     if (!values.quantity || parseFloat(values.quantity) <= 0) next.quantity = 'Enter a quantity';
     if (!String(values.driverName).trim()) next.driverName = 'Driver name is required';
-    if (!String(values.mobileNumber).trim()) next.mobileNumber = 'Mobile number is required';
-    else if (!/^[6-9]\d{9}$/.test(String(values.mobileNumber)))
-      next.mobileNumber = 'Enter a valid 10-digit mobile number';
+    // Optional, but validated when present. See services/textService.js.
+    const mobileProblem = mobileError(values.mobileNumber);
+    if (mobileProblem) next.mobileNumber = mobileProblem;
     if (values.advanceAmount !== '' && parseFloat(values.advanceAmount) < 0)
       next.advanceAmount = 'Advance cannot be negative';
 
@@ -606,14 +614,14 @@ const ReportsPage = () => {
       await tripService.updateTrip(detailTrip.id, {
         slNumber: parseInt(draft.slNumber, 10) || detailTrip.slNumber || 0,
         date: when,
-        vehicleNumber: String(draft.vehicleNumber).trim().toUpperCase(),
+        vehicleNumber: normaliseVehicleNumber(draft.vehicleNumber),
         vehicleType: draft.vehicleType,
         // Written together, because isStrReceived() reads either field.
         strStatus: draft.strStatus,
         strNumber: draft.strStatus,
         villages: draft.villages,
         quantity: parseFloat(draft.quantity),
-        driverName: String(draft.driverName).trim(),
+        driverName: titleCase(draft.driverName),
         mobileNumber: String(draft.mobileNumber).trim(),
         advanceAmount: nextAdvance
       });
@@ -621,7 +629,7 @@ const ReportsPage = () => {
       if (difference > 0) {
         await advanceService.addAdvance({
           tripId: detailTrip.id,
-          vehicleNumber: String(draft.vehicleNumber).trim().toUpperCase(),
+          vehicleNumber: normaliseVehicleNumber(draft.vehicleNumber),
           tripDate: when,
           advanceAmount: difference,
           advanceType: 'additional',
@@ -641,8 +649,8 @@ const ReportsPage = () => {
         known.mobileNumber !== draft.mobileNumber
       ) {
         await vehicleService.addVehicle({
-          vehicleNumber: String(draft.vehicleNumber).trim().toUpperCase(),
-          driverName: String(draft.driverName).trim(),
+          vehicleNumber: normaliseVehicleNumber(draft.vehicleNumber),
+          driverName: titleCase(draft.driverName),
           mobileNumber: String(draft.mobileNumber).trim(),
           vehicleType: draft.vehicleType,
           isActive: true
@@ -711,15 +719,43 @@ const ReportsPage = () => {
   }, [visibleTrips, win]);
 
   const villageOptions = useMemo(() => {
-    const names = new Set(villages.map((village) => village.villageName).filter(Boolean));
-    for (const name of draft?.villages || []) names.add(name);
-    return [...names].sort().map((name) => ({ value: name, label: name }));
+    const byName = new Map();
+    for (const village of villages) {
+      if (village.villageName) byName.set(village.villageName, village.code || '');
+    }
+    // A village already on the trip must stay selectable even if it has since
+    // been deactivated, or editing the trip would silently drop it.
+    for (const name of draft?.villages || []) if (!byName.has(name)) byName.set(name, '');
+
+    return [...byName.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([name, code]) => ({ value: name, label: name, subtitle: code || undefined }));
   }, [villages, draft]);
 
-  const addVillage = async (name) => {
-    setDraft((prev) => ({ ...prev, villages: [...prev.villages, name] }));
+  const addVillage = async (raw) => {
+    const villageName = normaliseVillageName(raw);
+    if (!villageName) return;
+
+    const existing = villages.find((item) => sameText(item.villageName, villageName));
+    const canonical = existing?.villageName || villageName;
+
+    setDraft((prev) =>
+      prev.villages.some((item) => sameText(item, canonical))
+        ? prev
+        : { ...prev, villages: [...prev.villages, canonical] }
+    );
+    if (existing) return;
+
     try {
-      const created = await villageService.addVillage({ villageName: name, isActive: true, usageCount: 1 });
+      const created = await villageService.addVillage({
+        villageName,
+        code: suggestVillageCode(
+          villageName,
+          villages.map((item) => item.code)
+        ),
+        isActive: true,
+        usageCount: 1
+      });
       setVillages((prev) => [...prev, created]);
     } catch (error) {
       console.error('Error adding village:', error);
@@ -1159,7 +1195,10 @@ const ReportsPage = () => {
                   value={draft.vehicleNumber}
                   error={errors.vehicleNumber}
                   onChange={(event) =>
-                    setDraft((prev) => ({ ...prev, vehicleNumber: event.target.value.toUpperCase() }))
+                    setDraft((prev) => ({
+                      ...prev,
+                      vehicleNumber: normaliseVehicleNumber(event.target.value)
+                    }))
                   }
                 />
               </ListRow>

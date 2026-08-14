@@ -144,3 +144,22 @@
     border-top-color: var(--label-3);
   }
 }
+
+/* ---------------------------------------------- compact (trend platter) mode */
+
+/* A preview of a bigger chart elsewhere. No grid, no axis, no interaction —
+   just the shape. Bars are slimmer and fully rounded so the strip reads as one
+   object rather than a chart that lost its furniture. */
+.cht26--compact {
+  gap: 0;
+}
+
+.cht26--compact .cht26__columns {
+  gap: 3px;
+}
+
+.cht26--compact .cht26__bar {
+  max-width: 8px;
+  border-radius: var(--r-capsule);
+  opacity: 0.9;
+}

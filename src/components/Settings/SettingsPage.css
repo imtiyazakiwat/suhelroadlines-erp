@@ -1,4 +1,5 @@
-/* Settings. Layout only — every element comes from src/ui. */
+/* Settings and its two pushed management screens.
+   Layout only — every element comes from src/ui. */
 
 .set {
   display: flex;
@@ -32,25 +33,39 @@
   padding: 0 var(--gutter);
 }
 
-/* Sticky search strip inside a manager sheet */
-.set__search {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  padding-bottom: var(--gap-3);
-  background: var(--glass-regular-tint);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-}
-
-/* The row that closes the Fleet section. Accent title, like Settings' own
-   "Add Account" rows. */
+/* The row that closes a section, the way Settings offers "Add Account". Accent
+   title so it reads as an action rather than a record. */
 .set__add-row .lst26__title {
   color: var(--accent);
 }
 
+/* ------------------------------------------------ pushed management screens */
+
+.fleet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-4);
+  padding-top: var(--gap-2);
+}
+
+.fleet__toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  padding: 0 var(--gutter);
+}
+
+/* Village codes are read as identifiers, not prose, so they get tabular
+   monospaced digits and a little letter-spacing. */
+.fleet__code {
+  font-family: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
 @media (min-width: 620px) {
-  .set {
+  .set,
+  .fleet {
     max-width: 560px;
     margin: 0 auto;
   }

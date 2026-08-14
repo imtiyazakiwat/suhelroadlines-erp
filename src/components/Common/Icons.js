@@ -176,3 +176,12 @@ export const CalendarIcon = ({ size = 24, className = '' }) => (
     <path d="M3.5 10h17M8.5 3.5v4M15.5 3.5v4" />
   </svg>
 );
+
+/* Villages are places, so they get a map pin rather than the gear the Settings
+   list used to borrow. A gear next to "Villages" implied configuration. */
+export const MapPinIcon = ({ size = 24, className = '' }) => (
+  <svg {...base(size)} className={className}>
+    <path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11Z" />
+    <circle cx="12" cy="10" r="2.6" />
+  </svg>
+);

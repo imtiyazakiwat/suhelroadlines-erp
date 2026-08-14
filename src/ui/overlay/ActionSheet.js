@@ -14,7 +14,7 @@ import './overlay.css';
    ========================================================================== */
 
 export const ActionSheet = ({ open, onClose, title, message, actions = [], cancelLabel = 'Cancel' }) => {
-  const panelRef = useOverlay(open, onClose);
+  const { panelRef, depth } = useOverlay(open, onClose);
 
   if (!open || typeof document === 'undefined') return null;
 
@@ -25,7 +25,11 @@ export const ActionSheet = ({ open, onClose, title, message, actions = [], cance
   };
 
   return createPortal(
-    <div className="ovl26 ovl26--action" role="presentation">
+    <div
+      className={`ovl26 ovl26--action ${depth > 0 ? 'ovl26--nested' : ''}`.trim()}
+      style={{ '--ovl-depth': depth }}
+      role="presentation"
+    >
       <button type="button" className="ovl26__scrim" aria-label="Close" tabIndex={-1} onClick={onClose} />
 
       <div
@@ -81,7 +85,7 @@ export const Alert = ({
   destructive = false,
   showCancel = true
 }) => {
-  const panelRef = useOverlay(open, onClose);
+  const { panelRef, depth } = useOverlay(open, onClose);
 
   if (!open || typeof document === 'undefined') return null;
 
@@ -91,7 +95,11 @@ export const Alert = ({
   };
 
   return createPortal(
-    <div className="ovl26 ovl26--alert" role="presentation">
+    <div
+      className={`ovl26 ovl26--alert ${depth > 0 ? 'ovl26--nested' : ''}`.trim()}
+      style={{ '--ovl-depth': depth }}
+      role="presentation"
+    >
       <button type="button" className="ovl26__scrim" aria-label="Close" tabIndex={-1} onClick={onClose} />
 
       <GlassSurface variant="regular" radius={26} className="alr26">

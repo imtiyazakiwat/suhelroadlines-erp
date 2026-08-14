@@ -1,9 +1,12 @@
 /* ============================ shared overlay shell ======================== */
 
+/* Depth comes from the overlay stack in useOverlay, so a sheet opened from
+   inside another sheet is always above it. Previously every overlay sat at the
+   same z-index and stacking fell back to portal mount order. */
 .ovl26 {
   position: fixed;
   inset: 0;
-  z-index: var(--z-sheet);
+  z-index: calc(var(--z-sheet) + var(--ovl-depth, 0) * 10);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -17,7 +20,7 @@
 .ovl26--alert {
   align-items: center;
   padding: var(--gap-5);
-  z-index: var(--z-alert);
+  z-index: calc(var(--z-alert) + var(--ovl-depth, 0) * 10);
 }
 
 .ovl26__scrim {
@@ -30,6 +33,16 @@
   -webkit-backdrop-filter: blur(2px);
   backdrop-filter: blur(2px);
   animation: ovl26-fade var(--dur-base) var(--ease-out) both;
+}
+
+/* A stacked overlay dims what is already dimmed. Two scrims at full strength
+   read as ~56% black and stack two full-screen backdrop filters, which looks
+   wrong and costs real frames on mobile Safari. The upper one only needs to
+   separate, so it is lighter and unblurred. */
+.ovl26--nested > .ovl26__scrim {
+  background: rgba(13, 27, 52, 0.16);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 @keyframes ovl26-fade {

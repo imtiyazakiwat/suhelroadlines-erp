@@ -11,7 +11,8 @@ import {
   EmptyState,
   Skeleton,
   Button,
-  GlassSurface
+  GlassSurface,
+  BarChart
 } from '../../ui';
 import {
   TruckIcon,
@@ -19,8 +20,7 @@ import {
   DocCheckIcon,
   DocAlertIcon,
   CardIcon,
-  TrendUpIcon,
-  FuelIcon
+  TrendUpIcon
 } from '../Common/Icons';
 import './Dashboard.css';
 
@@ -32,7 +32,8 @@ const EMPTY_SUMMARY = {
   vehicles: { total: 0, active: 0, inTransit: 0, inactive: 0 },
   reminders: [],
   totalSettlement: 0,
-  avgAdvancePerTrip: 0
+  avgAdvancePerTrip: 0,
+  month: { label: '', advance: 0, trips: 0, deltaPct: null, series: [] }
 };
 
 const SimpleDashboard = () => {
@@ -188,18 +189,46 @@ const SimpleDashboard = () => {
         )}
       </section>
 
-      {/* ------------------------------ Promo + stats ------------------------------ */}
+      {/* --------------------------- This month + stats --------------------------- */}
+      {/* Replaces a "Save on Diesel Expenses — 4% Cashback" promo that was pure
+          invention: no such feature exists, nothing was ever redeemable, and it
+          took the most prominent slot on the screen. What belongs there is the
+          number the business actually runs on.
+
+          It summarises rather than analyses, and taps through to Reports for the
+          detail — the widget contract. The sparkline is a trend platter: shape
+          only, no axes, because this is a preview of the real chart. */}
       <section className="home-grid">
-        <Card padded={false} inset={false} className="promo">
-          <button type="button" className="promo__hit" onClick={() => navigate('/add-advance')}>
-            <span className="promo__icon">
-              <FuelIcon size={24} />
-              <span className="promo__icon-badge">₹</span>
+        <Card padded={false} inset={false} className="month">
+          <button
+            type="button"
+            className="month__hit"
+            onClick={() => navigate('/reports?range=month')}
+            aria-label={`${summary.month.label}: ${formatINR(summary.month.advance)} advanced across ${
+              summary.month.trips
+            } trips. Open reports.`}
+          >
+            <span className="month__head">
+              <span className="month__label">{summary.month.label}</span>
+              {summary.month.deltaPct !== null && (
+                <Badge tone={summary.month.deltaPct >= 0 ? 'success' : 'danger'}>
+                  {summary.month.deltaPct >= 0 ? '▲' : '▼'} {Math.abs(summary.month.deltaPct)}%
+                </Badge>
+              )}
             </span>
-            <span className="promo__title">Save on Diesel Expenses</span>
-            <Badge tone="success">Get 4% Cashback</Badge>
-            <span className="promo__art" aria-hidden="true">
-              <TruckIcon size={74} />
+
+            <span className="month__value">{formatCompactINR(summary.month.advance)}</span>
+            <span className="month__caption">
+              advanced · {summary.month.trips} {summary.month.trips === 1 ? 'trip' : 'trips'}
+            </span>
+
+            <span className="month__spark">
+              <BarChart
+                compact
+                height={34}
+                points={summary.month.series}
+                ariaLabel="Advance over the last seven days"
+              />
             </span>
           </button>
         </Card>

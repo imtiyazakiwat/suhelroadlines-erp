@@ -27,7 +27,9 @@ const ROUTE_DEPTH = {
   '/reports': 0,
   '/settings': 0,
   '/add-entry': 1,
-  '/add-advance': 1
+  '/add-advance': 1,
+  '/settings/vehicles': 1,
+  '/settings/villages': 1
 };
 
 const depthOf = (pathname) => ROUTE_DEPTH[pathname] ?? 1;

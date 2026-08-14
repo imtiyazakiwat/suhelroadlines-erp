@@ -18,6 +18,19 @@ const DETENTS = { auto: 'auto', medium: '60vh', large: '92vh' };
 const DISMISS_DISTANCE = 110;
 const DISMISS_VELOCITY = 0.5;
 
+/* A flick has to actually travel before velocity is allowed to dismiss.
+   Without this floor a *tap* qualified: ~8px of finger drift over ~15ms is
+   0.53 px/ms, over the threshold. That is why tapping "Add" or "Save" in a
+   sheet header dismissed the sheet instead of running the action — the header
+   sits inside the drag region. Mouse clicks have no drift, so it only ever
+   reproduced on touch. */
+const DRAG_SLOP = 10;
+
+/* The grip contains the header actions. A press that starts on a control is
+   that control's press, never the start of a dismiss gesture. */
+const isInteractive = (node) =>
+  Boolean(node?.closest?.('button, a, input, select, textarea, [role="button"], [role="switch"]'));
+
 const Sheet = ({
   open,
   onClose,
@@ -31,7 +44,7 @@ const Sheet = ({
   className = '',
   children
 }) => {
-  const panelRef = useOverlay(open, onClose);
+  const { panelRef, depth } = useOverlay(open, onClose);
   const [dragY, setDragY] = useState(0);
   const [dragging, setDragging] = useState(false);
   const gesture = useRef({ startY: 0, startTime: 0, active: false });
@@ -46,8 +59,15 @@ const Sheet = ({
   const onPointerDown = useCallback(
     (event) => {
       if (!dismissible) return;
+      if (isInteractive(event.target)) return;
+
       gesture.current = { startY: event.clientY, startTime: Date.now(), active: true };
       setDragging(true);
+
+      // Capture, so a pointer that slides off the grip still delivers pointerup
+      // here. Without it the gesture stayed "active" and the panel froze mid
+      // drag, which also read as "the button did nothing".
+      event.currentTarget.setPointerCapture?.(event.pointerId);
     },
     [dismissible]
   );
@@ -62,14 +82,17 @@ const Sheet = ({
   const onPointerUp = useCallback(
     (event) => {
       if (!gesture.current.active) return;
+
       const delta = event.clientY - gesture.current.startY;
       const elapsed = Math.max(1, Date.now() - gesture.current.startTime);
       const velocity = delta / elapsed;
 
       gesture.current.active = false;
       setDragging(false);
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
 
-      if (delta > DISMISS_DISTANCE || velocity > DISMISS_VELOCITY) onClose?.();
+      const flicked = delta > DRAG_SLOP && velocity > DISMISS_VELOCITY;
+      if (delta > DISMISS_DISTANCE || flicked) onClose?.();
       else setDragY(0);
     },
     [onClose]
@@ -80,7 +103,11 @@ const Sheet = ({
   const maxHeight = DETENTS[detent] || DETENTS.auto;
 
   return createPortal(
-    <div className="ovl26" role="presentation">
+    <div
+      className={`ovl26 ${depth > 0 ? 'ovl26--nested' : ''}`.trim()}
+      style={{ '--ovl-depth': depth }}
+      role="presentation"
+    >
       <button
         type="button"
         className="ovl26__scrim"

@@ -7,6 +7,8 @@ import SimpleAddEntry from './components/AddEntry/SimpleAddEntry';
 import SimpleAddAdvance from './components/AddAdvance/SimpleAddAdvance';
 import SimpleReports from './components/Reports/SimpleReports';
 import SimpleSettings from './components/Settings/SimpleSettings';
+import VehiclesPage from './components/Settings/VehiclesPage';
+import VillagesPage from './components/Settings/VillagesPage';
 import SimpleSTRStatus from './components/STRStatus/SimpleSTRStatus';
 import { ToastProvider } from './ui';
 
@@ -27,6 +29,10 @@ function App() {
             <Route path="/reports" element={<SimpleReports />} />
             <Route path="/str-status" element={<SimpleSTRStatus />} />
             <Route path="/settings" element={<SimpleSettings />} />
+            {/* Pushed from Settings, so they get a Back button and real deep links
+                instead of a sheet opened from inside another sheet. */}
+            <Route path="/settings/vehicles" element={<VehiclesPage />} />
+            <Route path="/settings/villages" element={<VillagesPage />} />
           </Routes>
         </AppLayout>
       </Router>

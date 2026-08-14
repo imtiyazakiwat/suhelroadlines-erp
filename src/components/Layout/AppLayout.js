@@ -24,7 +24,9 @@ const TITLES = {
   '/add-advance': 'Add Advance',
   '/reports': 'Reports',
   '/str-status': 'STR Status',
-  '/settings': 'Settings'
+  '/settings': 'Settings',
+  '/settings/vehicles': 'Vehicles',
+  '/settings/villages': 'Villages'
 };
 
 const TABS = [

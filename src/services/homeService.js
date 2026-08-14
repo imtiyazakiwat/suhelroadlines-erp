@@ -70,8 +70,11 @@ const EMPTY = {
   vehicles: { total: 0, active: 0, inTransit: 0, inactive: 0 },
   reminders: [],
   totalSettlement: 0,
-  avgAdvancePerTrip: 0
+  avgAdvancePerTrip: 0,
+  month: { label: '', advance: 0, trips: 0, deltaPct: null, series: [] }
 };
+
+const sameMonth = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
 
 /**
  * Everything the home screen needs, in one pass over trips / vehicles / advances.
@@ -96,9 +99,11 @@ export const homeService = {
     }
 
     const now = new Date();
+    const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
     // ---- trips -------------------------------------------------------------
     let todayTrips = 0;
+    let monthTrips = 0;
     let paidStrCount = 0;
     const dueTrips = [];
     const vehiclesOnTripToday = new Set();
@@ -112,6 +117,8 @@ export const homeService = {
         todayTrips += 1;
         if (trip.vehicleNumber) vehiclesOnTripToday.add(trip.vehicleNumber);
       }
+
+      if (date && sameMonth(date, now)) monthTrips += 1;
 
       if (trip.vehicleNumber && date) {
         const previous = lastTripByVehicle.get(trip.vehicleNumber);
@@ -128,14 +135,26 @@ export const homeService = {
     // ---- advances ----------------------------------------------------------
     let totalSettlement = 0;
     let advanceToday = 0;
+    let monthAdvance = 0;
+    let previousMonthAdvance = 0;
     const advanceByTrip = new Map();
+    // Trailing 7 days, oldest first, for the sparkline on the month card.
+    const trailing = new Array(7).fill(0);
 
     advances.forEach((advance) => {
       const amount = Number(advance.advanceAmount) || 0;
       totalSettlement += amount;
 
-      const created = toDate(advance.createdAt) || toDate(advance.tripDate);
-      if (created && daysBetween(now, created) === 0) advanceToday += amount;
+      // Same rule Reports uses: an advance belongs to the period it was advanced
+      // *for*, falling back to when it was recorded.
+      const when = toDate(advance.tripDate) || toDate(advance.createdAt);
+      if (when) {
+        const diff = daysBetween(now, when);
+        if (diff === 0) advanceToday += amount;
+        if (diff >= 0 && diff <= 6) trailing[6 - diff] += amount;
+        if (sameMonth(when, now)) monthAdvance += amount;
+        else if (sameMonth(when, previousMonth)) previousMonthAdvance += amount;
+      }
 
       if (advance.tripId) {
         advanceByTrip.set(advance.tripId, (advanceByTrip.get(advance.tripId) || 0) + amount);
@@ -178,7 +197,22 @@ export const homeService = {
       },
       reminders,
       totalSettlement,
-      avgAdvancePerTrip: advanceTripCount ? Math.round(totalSettlement / advanceTripCount) : 0
+      avgAdvancePerTrip: advanceTripCount ? Math.round(totalSettlement / advanceTripCount) : 0,
+      month: {
+        label: now.toLocaleDateString('en-IN', { month: 'long' }),
+        advance: monthAdvance,
+        trips: monthTrips,
+        // Null rather than 0 when there is no baseline: "0% vs last month" would
+        // claim a comparison that was never made.
+        deltaPct: previousMonthAdvance
+          ? Math.round(((monthAdvance - previousMonthAdvance) / previousMonthAdvance) * 100)
+          : null,
+        series: trailing.map((value, index) => ({
+          key: `d${index}`,
+          value,
+          label: relativeDayLabel(new Date(now.getFullYear(), now.getMonth(), now.getDate() - (6 - index)))
+        }))
+      }
     };
   }
 };

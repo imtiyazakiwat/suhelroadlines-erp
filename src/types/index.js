@@ -73,11 +73,16 @@ export const createAdvance = ({
 });
 
 // Village Model
+// `code` is the short form used on paperwork (see services/textService.js).
+// Trips keep storing village *names*, not codes, so existing records stay valid
+// and no migration is needed; the code is resolved for display from this list.
 export const createVillage = ({
-  villageName
+  villageName,
+  code = ''
 }) => ({
   id: null, // Will be set by Firestore
   villageName: villageName || '',
+  code: code || '',
   isActive: true,
   usageCount: 0,
   lastUsed: new Date()

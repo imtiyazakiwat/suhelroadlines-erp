@@ -416,12 +416,19 @@ export const vehicleService = {
     }
   },
 
-  // Get all vehicles
-  async getAllVehicles() {
+  /**
+   * Get vehicles. Inactive ones are hidden by default, because pickers should
+   * only offer vehicles you can actually dispatch.
+   *
+   * `includeInactive` exists for the management screen. Without it, deactivating
+   * a vehicle made it vanish from Settings too, with no way to see it or switch
+   * it back on — the Inactive badge in that list was unreachable code.
+   */
+  async getAllVehicles(includeInactive = false) {
     if (!checkFirebaseAvailability()) {
       return await localVehicleService.getAllVehicles();
     }
-    
+
     try {
       const vehicles = await fastSync.readCollection(COLLECTIONS.VEHICLES, async () => {
         const querySnapshot = await getDocs(collection(db, COLLECTIONS.VEHICLES));
@@ -429,7 +436,7 @@ export const vehicleService = {
       });
 
       // Filter client-side to avoid index requirements
-      return vehicles.filter(vehicle => vehicle.isActive !== false);
+      return includeInactive ? vehicles : vehicles.filter(vehicle => vehicle.isActive !== false);
     } catch (error) {
       console.warn('Firebase getAllVehicles failed, falling back to local storage');
       return await localVehicleService.getAllVehicles();
@@ -785,17 +792,17 @@ export const villageService = {
     }
   },
 
-  // Get all villages
-  async getAllVillages() {
+  /** See vehicleService.getAllVehicles for why `includeInactive` exists. */
+  async getAllVillages(includeInactive = false) {
     try {
       const villages = await fastSync.readCollection(COLLECTIONS.VILLAGES, async () => {
         const querySnapshot = await getDocs(collection(db, COLLECTIONS.VILLAGES));
         return querySnapshot.docs.map(d => ({ ...d.data(), id: d.id }));
       });
-      
+
       // Filter and sort client-side to avoid composite index requirements
       return villages
-        .filter(village => village.isActive !== false)
+        .filter(village => includeInactive || village.isActive !== false)
         .sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0));
     } catch (error) {
       console.error('Error getting villages:', error);
