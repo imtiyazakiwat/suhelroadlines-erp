@@ -9,6 +9,7 @@ import SimpleReports from './components/Reports/SimpleReports';
 import SimpleSettings from './components/Settings/SimpleSettings';
 import VehiclesPage from './components/Settings/VehiclesPage';
 import VillagesPage from './components/Settings/VillagesPage';
+import DataPage from './components/Settings/DataPage';
 import SimpleSTRStatus from './components/STRStatus/SimpleSTRStatus';
 import PWABridge from './components/Common/PWABridge';
 import { ToastProvider } from './ui';
@@ -39,6 +40,7 @@ function App() {
                 instead of a sheet opened from inside another sheet. */}
             <Route path="/settings/vehicles" element={<VehiclesPage />} />
             <Route path="/settings/villages" element={<VillagesPage />} />
+            <Route path="/settings/data" element={<DataPage />} />
           </Routes>
         </AppLayout>
       </Router>

@@ -20,6 +20,17 @@ const Picker = ({
   options = [],
   onChange,
   placeholder = 'Select',
+  /**
+   * Overrides the text on the trigger row.
+   *
+   * For a multi-select the trigger normally reads "2 selected". That is right
+   * when the picker owns the value, and wrong when the chosen items are already
+   * listed next to it — the trip form shows villages as removable chips, so the
+   * count would be the same quantity stated twice, one row apart. Pass a summary
+   * ("Choose", "Add more") to make the row read as the action it is. It renders
+   * in the placeholder style deliberately: it is a prompt, not a value.
+   */
+  summary,
   searchable = false,
   searchPlaceholder = 'Search',
   onCreate,
@@ -73,13 +84,19 @@ const Picker = ({
   const isChosen = (option) =>
     multiple ? selectedValues.includes(option.value) : option.value === value;
 
-  const triggerText = multiple
+  const computedText = multiple
     ? selectedValues.length
       ? `${selectedValues.length} selected`
       : placeholder
     : selected?.label || placeholder;
 
-  const hasValue = multiple ? selectedValues.length > 0 : Boolean(selected);
+  const triggerText = summary || computedText;
+
+  const hasValue = summary
+    ? false
+    : multiple
+    ? selectedValues.length > 0
+    : Boolean(selected);
 
   return (
     <>

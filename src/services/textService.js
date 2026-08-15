@@ -28,6 +28,22 @@ export const normaliseVehicleNumber = (value) =>
     .replace(/\s+/g, ' ')
     .replace(/^\s+/, '');
 
+/**
+ * The settled form of a vehicle number: uppercase and fully trimmed.
+ *
+ * `normaliseVehicleNumber` deliberately keeps a trailing space so you can keep
+ * typing, which is right for a field but wrong for anything else. Use this at
+ * the two boundaries where the value stops being editable:
+ *
+ *   - **saving**, because the vehicle number is the Firestore document *id*.
+ *     "KA 01 " and "KA 01" would be two different vehicles, and neither could be
+ *     edited back into the other.
+ *   - **displaying**, because records written before normalisation existed (and
+ *     anything typed into an older build) can still be lower case, and a number
+ *     plate is uppercase on every permit and STR.
+ */
+export const formatVehicleNumber = (value) => tidy(value).toUpperCase();
+
 /** Title Case for names of people and places: "ahmed khan" -> "Ahmed Khan". */
 export const titleCase = (value) =>
   tidy(value)
@@ -92,6 +108,7 @@ const textService = {
   tidy,
   titleCase,
   normaliseVehicleNumber,
+  formatVehicleNumber,
   normaliseVillageName,
   normaliseVillageCode,
   suggestVillageCode,

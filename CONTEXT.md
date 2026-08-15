@@ -107,11 +107,21 @@ A React trucking/transport ERP for Suhel Roadlines. Four record types:
 | Record | Key fields |
 |---|---|
 | **trip** | `slNumber`, `date`, `vehicleNumber`, `driverName`, `mobileNumber`, `villages[]`, `quantity`, `advanceAmount`, `vehicleType`, `strStatus` / `strNumber` |
-| **vehicle** | doc id **is** `vehicleNumber`; `driverName`, `mobileNumber`, `vehicleType`, `isActive` |
+| **vehicle** | doc id **is** `vehicleNumber`; `driverName`, `mobileNumber`, `vehicleType`, **`isOwn`**, `isActive` |
 | **advance** | `vehicleNumber`, `tripId`, `tripDate`, `advanceAmount`, `advanceType` (`initial` \| `additional`), `note`, `isSettled` |
 | **village** | `villageName`, **`code`**, `isActive`, `usageCount`, `lastUsed` |
 
-`mobileNumber` is **optional** on trips and vehicles. Village `code` is the short
+`driverName` **and** `mobileNumber` are **both optional** on trips and vehicles.
+A vehicle is regularly booked before the driver is assigned, and the app used to
+refuse the whole record over a missing name.
+
+`isOwn` marks the firm's own lorries apart from hired ones. Boolean, not an enum,
+because the only question is "is this mine". Read it as **`vehicle.isOwn === true`
+everywhere**: it defaults to `false` and existing records have no such field, so a
+missing value means "never marked", which must not be shown as ownership nobody
+entered.
+
+Village `code` is the short
 form used on paperwork; it is uppercase, unique, and suggested from the name.
 **Trips store village *names*, not codes**, so no migration was needed — the code
 is resolved for display from the villages list.
@@ -150,7 +160,7 @@ rewrite, and the `villageService.updateVillage` / `deleteVillage` additions.
 | STR Status | `STRStatus/SimpleSTRStatus.js` | Done |
 | Add Trip | `AddEntry/AddEntryForm.js` | Done |
 | Add Advance | `AddAdvance/AddAdvance.js` | Done |
-| Settings | `Settings/SettingsPage.js` + `VehiclesPage.js` + `VillagesPage.js` | Done — split into pushed screens, §3b |
+| Settings | `Settings/SettingsPage.js` + `VehiclesPage.js` + `VillagesPage.js` + `DataPage.js` | Done — split into pushed screens, §3b |
 | — | all of the above | reworked again: action bars moved to the nav bar, §3 |
 | Reports | `Reports/ReportsPage.js` | Done — rebuilt on the design system, §3a |
 
@@ -169,6 +179,7 @@ re-export and the real code is in the non-prefixed or `*Page` file.
 | `/settings` | `SimpleSettings` → `SettingsPage` — navigation only |
 | `/settings/vehicles` | `VehiclesPage` — pushed, depth 1 |
 | `/settings/villages` | `VillagesPage` — pushed, depth 1 |
+| `/settings/data` | `DataPage` — pushed, depth 1. Counts and pruning, §3c |
 | `/add-entry` | `SimpleAddEntry` → `AddEntryForm` |
 | `/add-advance` | `SimpleAddAdvance` → `AddAdvance` |
 
@@ -228,7 +239,7 @@ it filters *content* rather than backdrop and is size-capped in Safari.
 |---|---|
 | `Button.js` | `variant="filled\|tinted\|gray\|plain\|glass"`, `size`, `role="destructive\|brand"`, `block`, `loading`, `capsule`, `icon` |
 | `Field.js` | `TextField`, `NumberField`, `CurrencyField`, `PhoneField`, `DateField`, `TextArea`, `SearchField`, `Field`. `layout="stacked\|row"` |
-| `Picker.js` | Replaces every native `<select>`. Trigger row + Sheet of options. `searchable`, `onCreate`, `multiple` |
+| `Picker.js` | Replaces every native `<select>`. Trigger row + Sheet of options. `searchable`, `onCreate`, `multiple`, `summary` (overrides the trigger text — use it when the chosen values are rendered next to the picker, so the row does not restate "2 selected" above the two chips it counts) |
 | `Segmented.js` | Sliding-pill segmented control, optional per-option `count` |
 | `List.js` | `ListSection` (header/footer/inset), `ListRow`, `ListLink`. **The table replacement** |
 | `Display.js` | `Card`, `SectionHeader`, `Badge`, `Chip`, `Switch`, `EmptyState`, `Skeleton`, `Divider`, `Stat` |
@@ -361,10 +372,111 @@ management screens pass `true`. Before that flag existed, deactivating a vehicle
 made it vanish from Settings as well, and the "Inactive" badge in that list was
 unreachable code.
 
+### 3c. Own vehicles, removal, and pruning
+
+**Own vs hired.** `/settings/vehicles` splits the list into **My vehicles** and
+**Other vehicles** rather than growing a second filter. Recognition over recall:
+both groups stay on screen, so "how many of these are mine" needs no tap, and a
+segmented control would have hidden one group behind the other while competing
+with the status filter directly above it for meaning. An empty group is dropped —
+a header over blank space implies records that are not there. The trip and
+advance pickers sort own vehicles first and mark them `My vehicle` in the
+subtitle; the marker is not in the label because the label must stay exactly the
+number, and the Picker matches typed text against both, so typing "my" filters to
+the own fleet.
+
+**Removal is two actions, offered from one row.** They were the same button, which
+is the whole reason "delete not working" was reported: `Remove vehicle` set
+`isActive: false`, so a vehicle the user had asked to get rid of kept appearing
+forever. Now `Remove vehicle…` opens an ActionSheet, reversible option first:
+
+| Action | Service | Effect |
+|---|---|---|
+| Deactivate / Reactivate | `deactivateVehicle` | `isActive` flag, applied immediately, stays in the cache and in Settings under Inactive |
+| Delete Permanently | `deleteVehicle` | second confirmation, then a real Firestore delete |
+
+Trips and advances are never cascaded. They store the vehicle *number* as a
+string, so history outlives the vehicle record, and cascading would destroy the
+books to tidy a list. Villages work identically (`deactivateVillage` /
+`deleteVillage`), and deactivated villages are now **listed** on their screen with
+an inactive subtitle — they used to be filtered out, which made deactivation a
+one-way door and the badge unreachable code.
+
+**Pruning — `/settings/data` + `src/services/dataService.js`.** Modelled on
+Settings > General > Transfer or Reset iPhone: counts, then reset options in red,
+on a screen you navigate to on purpose. Two scopes, narrower first, because
+clearing a season of records while keeping the fleet is the routine operation:
+`Delete Trips & Advances` (trips + advances + tripAdvances, one confirmation) and
+`Delete All Data` (adds vehicles + villages, **two** confirmations, because it is
+irreversible, unbacked, and lands on every device sharing the database).
+
+Deleting has to happen in all four places or the records come back, in this order:
+
+1. Firestore, in `writeBatch` chunks of 400 (the cap is 500)
+2. RTDB `/cache/<col>`
+3. RTDB `/outbox/<col>` — miss this and `flushOutbox` faithfully re-promotes
+   exactly what was just deleted
+4. memory + `sessionStorage` `srl_fast_*` + `localStorage` `suhelroadline_*`
+
+2-4 are `fastSync.clearCollection`, which is new and also the honest way to
+recover from a poisoned cache without touching the system of record. It clears
+memory *first*, because `ensureSubscription` ignores empty RTDB snapshots and
+would otherwise leave the in-memory copy standing. Firestore goes first overall so
+a half-run leaves stale caches rather than a record resurrected from a cache into
+an empty Firestore. Counts report `null`, never `0`, when a read failed — on a
+screen whose next button is irreversible those two must not look the same.
+
+### 3d. Add Trip, and what makes it fast
+
+Screen's job: record one trip in as few decisions as possible, and keep the
+vehicle and village books up to date as a side effect of doing so.
+
+**Two required fields**, and only two: which vehicle, and where it is going.
+Everything else defaults (SL number, date, type, STR status) or is optional
+(driver, mobile, quantity, advance). The STR-status and vehicle-type validations
+that used to sit alongside them could never fire — both come from a Segmented
+control that is always on one of its options, and both default again in the
+service — so they were dead strings on a form filled in twenty times a day.
+
+**Vehicle number.** A searchable `Picker` with `onCreate`, so an unknown number is
+typed straight into the search field and added from the row beneath it. The create
+row says **Add**, not "Use": the label has to describe the consequence, or the
+automatic save is a surprise rather than a convenience. Picking a known vehicle
+carries its driver, mobile **and type** across; typing an unknown number
+**clears** the driver fields, because otherwise the previously picked vehicle's
+driver rode along and got saved onto the new one.
+
+**Villages.** Chips are the value, and the picker row beneath them is the action —
+Calendar's shape for guests. Multi-select keeps the sheet open, so a three-village
+route is one visit. A village typed in is created immediately (Title Cased, with a
+code suggested from the name) so the chip is real; a village chosen has its
+`usageCount` bumped, which is what keeps the list ordered by what you actually
+use.
+
+**The advance is part of the trip.** `tripService.addTrip` writes an `initial`
+advance in the same pass when an amount is present, which is the whole reason the
+field is on this form: the ledger and Reports stay correct without a second visit
+to Add Advance. The section footer says so, and changes when an amount is entered.
+
+**What gets saved automatically, and when.** Villages on entry; the vehicle when
+the trip is saved, so an abandoned form leaves no vehicle behind. The vehicle
+upsert only writes values that are **present and different**, and never sends
+`isOwn` — a merge would otherwise reset ownership every time a trip was logged.
+The book-keeping runs in its own `try`: the trip is already committed by then, so a
+failure reports "Trip saved. The vehicle list could not be updated." rather than
+the outer catch's "Could not save the trip", which was a lie about a record that
+was on file.
+
+**Errors belong to fields, not to section footers.** A `Field`/`Picker` renders
+its own `error` next to the input and sets `aria-invalid`; the section footer
+carries the persistent hint. Passing the error to both printed every message
+twice, one line apart, and pushed the hint off screen exactly when it mattered.
+
 ### Input normalisation — `src/services/textService.js`
 
 Every form goes through it, so all screens behave identically:
 `normaliseVehicleNumber` (uppercase, keeps the separators people type),
+`formatVehicleNumber` (uppercase **and trimmed**),
 `titleCase` / `normaliseVillageName`, `normaliseVillageCode` (A–Z0–9, max 6),
 `suggestVillageCode` (first three letters, then a numeric suffix to avoid
 collisions), `sameText` (case-insensitive compare), `isValidMobile` /
@@ -373,6 +485,21 @@ collisions), `sameText` (case-insensitive compare), `isValidMobile` /
 Normalisation happens **as you type**. Correcting silently at save time shows the
 user one value and stores another. Village names are matched case-insensitively,
 which is what stops "bagalkot" and "Bagalkot" both appearing in the picker.
+
+The two vehicle-number helpers are not interchangeable.
+`normaliseVehicleNumber` deliberately keeps a **trailing space** so you can keep
+typing — right for a field, wrong for anything else. `formatVehicleNumber` trims,
+and is what belongs at the two points where the value stops being editable:
+
+- **saving**, because the vehicle number is the Firestore document *id*, so
+  `"KA 01 "` and `"KA 01"` would be two vehicles neither of which could be
+  reconciled with the other. Every save path now uses it;
+- **displaying**, because records written before normalisation existed are still
+  mixed case. Uppercasing on read rather than migrating is deliberate: the doc id
+  *is* the number, so normalising stored keys means copy-and-delete per record,
+  not an update. Display sites: `VehiclesPage`, `ReportsPage` (rows, detail,
+  top-vehicles, CSV, delete confirmation), `SimpleSTRStatus`, `SearchOverlay`,
+  `NotificationsSheet`, `homeService` reminders, and both vehicle pickers.
 
 ### Edit sessions — `src/components/Layout/`
 
@@ -415,6 +542,7 @@ still matches, otherwise a departing screen wipes the arriving screen's session.
 | Add Trip | active always. `Save`; Cancel is `navigate(-1)` |
 | Add Advance | active always. `Add`, disabled until a trip and a positive amount exist |
 | Settings | none — its "Add Vehicle" capsule became an add **row** closing the Fleet section, the way Settings offers Add Account |
+| Vehicles / Villages / Data | none — sheets and alerts own their own commits |
 
 Both forms keep a `<button type="submit" hidden>` so keyboard submission still
 works now that the visible button is outside the `<form>`, and their
@@ -458,6 +586,8 @@ Three tiers so the UI never waits on Firestore:
 **Writes:** memory → RTDB `/cache` + `/outbox` → Firestore → delete the outbox
 entry. A failed promotion leaves the outbox entry for retry on next start
 (`flushOutbox`, deferred 1.5s after load). **Reads:** stale-while-revalidate.
+`clearCollection` wipes a collection out of every tier below Firestore; see §3c
+for why it clears memory before the RTDB node.
 Dates are serialised to ISO strings for RTDB, so consumers must handle both
 Timestamp and string — use `toDate()` from `homeService`.
 
@@ -476,6 +606,19 @@ writes through `fastSync.writeRecord`. Every method guards on
 `getTripsByDateRange` now filters the cached list client-side instead of
 querying Firestore. `dashboardService.getTodayMetrics` derives from the cache
 instead of three separate queries.
+
+**Every mutation must go through `fastSync`.** A raw `updateDoc` is invisible to
+the UI, because reads come from the cache tiers and a Firestore-only write leaves
+all three holding the old record. Two vehicle methods were doing exactly that; see
+§5.14. Use `setDoc(..., { merge: true })` rather than `updateDoc` for updates: the
+document may exist only in the cache or the outbox (normal for a record added
+seconds earlier, since `addVehicle` resolves on the RTDB write), and `updateDoc`
+throws `not-found` on it while a merge creates it.
+
+### `src/services/dataService.js`
+
+Counting and bulk deletion — `getDataFootprint`, `pruneCollections`,
+`pruneRecords`, `pruneAllData`. See §3c. Nothing else in the app deletes in bulk.
 
 ### `src/services/homeService.js`
 
@@ -560,6 +703,57 @@ instead of three separate queries.
 13. STR's date-range chip was 32px tall — under the 44pt minimum. It now expands
     its hit area with `::after { inset: -5px -6px }` rather than growing the
     chip, and carries a chevron so it reads as opening something.
+14. **"Vehicle delete not working."** Three faults stacked, all in
+    `vehicleService`. (a) `updateVehicle` and `deleteVehicle` called `updateDoc`
+    **directly, bypassing fastSync** — so the caches (memory, `sessionStorage`,
+    RTDB `/cache/vehicles`) kept the old record and the list re-rendered the row
+    you had just changed or removed. (b) `updateDoc` throws `not-found` when the
+    document exists only in the cache or outbox, which is the normal state for a
+    vehicle added seconds earlier, since `addVehicle` resolves on the RTDB write.
+    (c) neither had a `checkFirebaseAvailability()` guard, so with Firestore
+    unavailable they called `doc(null, …)` and the raw Firebase error surfaced as
+    "Could not save the vehicle". All three fixed: both go through
+    `fastSync.writeRecord` / `removeRecord`, updates use
+    `setDoc(..., { merge: true })` so a cache-only document is created rather
+    than throwing, and both guard and fall back to `localVehicleService` (which
+    had no `deleteVehicle` at all, and ignored `includeInactive`, so deactivating
+    in fallback mode hid the record from the screen that manages it).
+15. **`deleteVehicle` was a soft delete wearing a delete label** — it set
+    `isActive: false` and nothing else, so a vehicle the user had asked to remove
+    kept appearing forever with no way to get rid of it. Deactivation is now its
+    own action and delete really deletes. `villageService.deleteVillage` was worse:
+    `removeRecord` (which queues `op: 'delete'`) paired with a Firestore write that
+    only flagged `isActive`, so the row vanished from the cache and returned on the
+    next revalidation.
+16. **The outbox promoters for vehicles and villages had no delete branch.** A
+    queued delete was replayed as `setDoc(id, entry.data, { merge: true })` with
+    `entry.data` set to `null` — which throws, sticks in the outbox forever, and
+    would resurrect the record if it ever succeeded. Only trips handled it. All
+    four now share `promoteDeleteOr(collection)`.
+17. **The trip forms merged blanks over the vehicle book.** Both Add Trip and the
+    Reports trip editor compared `existing.driverName !== formData.driverName` and
+    then wrote the form's values over the record. With the driver fields optional
+    that compares `undefined` against `''` — true on every save — and merged an
+    empty name over a real one. They now write only values that are present and
+    genuinely different. The same block also omitted `vehicleType` sometimes, and
+    `addVehicle` defaults a missing type to `'lorry'`, so saving a trip for a
+    tempo silently reclassified it; the type is now prefilled from the picked
+    vehicle and always sent.
+18. **`Picker` showed its placeholder for a value it had just created.** The
+    trigger renders `options.find(o => o.value === value)?.label`, and a typed-in
+    vehicle number is not in the list — so entering a new vehicle left the field
+    reading "Select vehicle" as if nothing had been entered. The current value is
+    now injected as an option labelled "New vehicle" when it is not already there.
+19. **A failed vehicle-book update reported "Could not save the trip"** after the
+    trip had been saved, because the upsert shared the outer `try`. It has its own
+    now; the message names what actually failed.
+20. **The same error string rendered twice**, once by the field (which also sets
+    `aria-invalid`) and once in the `ListSection` footer that was passed the same
+    value. Footers carry hints; controls carry their own errors.
+21. **A count sitting on top of the list it counted.** Add Trip had a
+    "Villages — 2 added" row directly above the chips, and the multi-select
+    trigger beneath them read "2 selected". One value, three representations. The
+    count row is gone and the trigger takes a `summary`.
 
 ---
 
@@ -623,7 +817,7 @@ the only data source and don't go looking for the old one.
 Current contents are mock records seeded via the Firestore REST API: 4 vehicles,
 7 villages, 13 trips (9 this month, 4 last month; 8 STR due / 5 received) and 16
 advances. Trip and advance ids are `mock_`-prefixed so they can be deleted in one
-pass. Note `getAllTrips` uses `orderBy('createdAt')`, and Firestore silently
+pass — or wiped from the app itself now, via `/settings/data` (§3c). Note `getAllTrips` uses `orderBy('createdAt')`, and Firestore silently
 omits documents missing that field — any seeded trip must set it.
 
 STR state is written to `strStatus` **and** `strNumber` together, because

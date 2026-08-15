@@ -1,4 +1,5 @@
 import { tripService, vehicleService, advanceService } from './firebaseService';
+import { formatVehicleNumber } from './textService';
 
 /** Firestore Timestamp | Date | string -> Date | null */
 export const toDate = (value) => {
@@ -61,6 +62,81 @@ export const formatINR = (amount) =>
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
   }).format(Number(amount) || 0);
+
+/**
+ * Join the advance ledger onto trips.
+ *
+ * Lifted out of ReportsPage so there is exactly one definition of "what this
+ * trip was advanced". The old Reports page had two — the row rendered
+ * `advanceAmount` while the summary and the CSV used `totalAdvances` — and they
+ * disagreed on screen. Any new screen that needs the figure imports this rather
+ * than adding a third.
+ *
+ * The synthetic "initial advance" stands in for trips whose opening advance was
+ * recorded on the trip itself rather than as its own document, so those trips
+ * still appear in the ledger instead of quietly holding money nobody can see.
+ *
+ * @returns {{trips: object[], advances: object[]}} enriched trips, and every
+ *   advance record including the stand-ins.
+ */
+export const joinTripAdvances = (trips = [], advances = []) => {
+  const byTrip = new Map();
+  for (const advance of advances) {
+    if (!advance.tripId) continue;
+    const bucket = byTrip.get(advance.tripId);
+    if (bucket) bucket.push(advance);
+    else byTrip.set(advance.tripId, [advance]);
+  }
+
+  const synthetic = [];
+
+  const enriched = trips.map((trip) => {
+    const own = byTrip.get(trip.id) || [];
+
+    let initialList = own.filter((item) => item.advanceType === 'initial');
+    const additionalList = own.filter(
+      (item) => item.advanceType === 'additional' || (!item.advanceType && item.tripId)
+    );
+
+    const sum = (list) => list.reduce((total, item) => total + (Number(item.advanceAmount) || 0), 0);
+    let initialTotal = sum(initialList);
+    const additionalTotal = sum(additionalList);
+
+    if (Number(trip.advanceAmount) > 0 && initialTotal === 0) {
+      const standIn = {
+        id: `trip-${trip.id}`,
+        tripId: trip.id,
+        vehicleNumber: trip.vehicleNumber,
+        tripDate: trip.date,
+        advanceAmount: Number(trip.advanceAmount) || 0,
+        advanceType: 'initial',
+        note: 'Opening advance recorded on the trip',
+        createdAt: trip.createdAt || trip.date,
+        synthetic: true
+      };
+      initialList = [standIn];
+      initialTotal = standIn.advanceAmount;
+      synthetic.push(standIn);
+    }
+
+    return {
+      ...trip,
+      initialAdvances: initialList,
+      additionalAdvances: additionalList,
+      initialTotal,
+      additionalTotal,
+      totalAdvances: initialTotal + additionalTotal,
+      // Every record counted exactly once. The old version added the initial
+      // list length on top of a count that already included it.
+      advanceCount: initialList.length + additionalList.length
+    };
+  });
+
+  return { trips: enriched, advances: [...advances, ...synthetic] };
+};
+
+/** An advance belongs to the period it was advanced *for*, not when it was typed. */
+export const advanceWhen = (advance) => advance?.tripDate || advance?.createdAt;
 
 const EMPTY = {
   todayTrips: 0,
@@ -176,8 +252,8 @@ export const homeService = {
       .slice(0, 3)
       .map((trip) => ({
         id: trip.id,
-        title: trip.driverName || trip.vehicleNumber || 'Unknown driver',
-        vehicleNumber: trip.vehicleNumber || '',
+        title: trip.driverName || formatVehicleNumber(trip.vehicleNumber) || 'Unknown driver',
+        vehicleNumber: formatVehicleNumber(trip.vehicleNumber),
         amount: advanceByTrip.get(trip.id) ?? (Number(trip.advanceAmount) || 0),
         dayLabel: relativeDayLabel(trip._date)
       }));

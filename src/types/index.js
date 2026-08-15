@@ -37,16 +37,29 @@ export const VEHICLE_TYPES = ['lorry', 'tempo', 'pickup'];
 export const STR_STATUS_VALUES = ['not received', 'Received'];
 
 // Vehicle Model
+//
+// `driverName` and `mobileNumber` are both optional: plenty of vehicles are
+// booked before anyone knows who is driving, and refusing to record the vehicle
+// over a missing name blocked real work.
+//
+// `isOwn` marks the firm's own lorries apart from hired ones. It is a boolean
+// rather than a status enum because the only question being asked is "is this
+// mine", and it defaults to **false** on purpose: an existing record has never
+// been asked, and defaulting to true would claim ownership nobody entered. Read
+// it as `vehicle.isOwn === true` everywhere, so a missing field means
+// "not marked as mine" instead of undefined.
 export const createVehicle = ({
   vehicleNumber,
   driverName,
   mobileNumber,
-  vehicleType = 'lorry'
+  vehicleType = 'lorry',
+  isOwn = false
 }) => ({
   vehicleNumber: vehicleNumber || '',
   driverName: driverName || '',
   mobileNumber: mobileNumber || '',
   vehicleType: vehicleType,
+  isOwn: isOwn === true,
   isActive: true,
   createdAt: new Date(),
   updatedAt: new Date()

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom';
 import { tripService } from '../../services/firebaseService';
 import { isStrReceived, formatINR } from '../../services/homeService';
+import { formatVehicleNumber } from '../../services/textService';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import {
   Button,
@@ -279,7 +280,10 @@ const SimpleSTRStatus = () => {
                 key={trip.id}
                 icon={received ? <DocCheckIcon size={17} /> : <DocAlertIcon size={17} />}
                 iconTone={received ? 'success' : 'danger'}
-                title={trip.vehicleNumber}
+                /* Uppercased for display: records written before input
+                   normalisation existed can still be mixed case, and a plate is
+                   uppercase on every permit and STR. */
+                title={formatVehicleNumber(trip.vehicleNumber)}
                 subtitle={`#${trip.slNumber ?? '—'} · ${trip.driverName || 'No driver'}`}
                 detail={formatDate(trip.date)}
                 badge={

@@ -27,7 +27,8 @@ const TITLES = {
   '/str-status': 'STR Status',
   '/settings': 'Settings',
   '/settings/vehicles': 'Vehicles',
-  '/settings/villages': 'Villages'
+  '/settings/villages': 'Villages',
+  '/settings/data': 'Data'
 };
 
 const TABS = [

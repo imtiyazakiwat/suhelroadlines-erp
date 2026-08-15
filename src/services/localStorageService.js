@@ -97,9 +97,12 @@ export const localVehicleService = {
     return newVehicle;
   },
 
-  async getAllVehicles() {
+  // `includeInactive` mirrors vehicleService.getAllVehicles. Without it the
+  // management screen could deactivate a vehicle in fallback mode and then had
+  // no way to see it again or switch it back on.
+  async getAllVehicles(includeInactive = false) {
     const vehicles = getStorageData(STORAGE_KEYS.VEHICLES);
-    return vehicles.filter(vehicle => vehicle.isActive !== false);
+    return includeInactive ? vehicles : vehicles.filter(vehicle => vehicle.isActive !== false);
   },
 
   async getVehicle(vehicleNumber) {
@@ -121,6 +124,23 @@ export const localVehicleService = {
       return vehicles[index];
     }
     return null;
+  },
+
+  // Reversible: the record stays, it just stops being offered for dispatch.
+  async deactivateVehicle(vehicleNumber, isActive = false) {
+    return await this.updateVehicle(vehicleNumber, { isActive: isActive === true });
+  },
+
+  // A real delete, so the fallback path matches Firestore's. Without this,
+  // deleting a vehicle with Firebase unavailable threw
+  // "vehicleService.deleteVehicle is not a function" into a toast.
+  async deleteVehicle(vehicleNumber) {
+    const vehicles = getStorageData(STORAGE_KEYS.VEHICLES);
+    setStorageData(
+      STORAGE_KEYS.VEHICLES,
+      vehicles.filter(v => v.vehicleNumber !== vehicleNumber)
+    );
+    return vehicleNumber;
   }
 };
 
@@ -305,10 +325,17 @@ export const initializeSampleData = () => {
   }
 };
 
-// Clear all local storage data (for testing)
-export const clearAllLocalData = () => {
-  Object.values(STORAGE_KEYS).forEach(key => {
+// The keys above, exported so the prune feature can clear the same records it
+// deletes from Firestore. Leaving them behind would be worse than not pruning
+// at all: the fallback path would hand the deleted records straight back the
+// next time Firestore was unavailable, and the app would look like the delete
+// had silently undone itself.
+export { STORAGE_KEYS as LOCAL_STORAGE_KEYS };
+
+// Clear specific local collections, or everything when called with no argument.
+export const clearAllLocalData = (keys = Object.values(STORAGE_KEYS)) => {
+  keys.forEach(key => {
     localStorage.removeItem(key);
   });
-  console.log('All local storage data cleared');
+  console.log(`Local storage cleared: ${keys.join(', ')}`);
 };

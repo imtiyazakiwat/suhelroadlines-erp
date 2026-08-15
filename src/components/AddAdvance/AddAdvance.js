@@ -18,6 +18,7 @@ import {
   useToast
 } from '../../ui';
 import useCommitAction from '../Layout/useCommitAction';
+import { formatVehicleNumber } from '../../services/textService';
 import { WalletIcon, TruckIcon, RupeeIcon } from '../Common/Icons';
 import './AddAdvance.css';
 
@@ -105,15 +106,23 @@ const AddAdvance = () => {
     setErrors((prev) => (prev[field] ? { ...prev, [field]: null } : prev));
   };
 
-  const vehicleOptions = useMemo(
-    () =>
-      vehicles.map((vehicle) => ({
-        value: vehicle.vehicleNumber,
-        label: vehicle.vehicleNumber,
-        subtitle: [vehicle.driverName, vehicle.mobileNumber].filter(Boolean).join(' · ')
-      })),
-    [vehicles]
-  );
+  /* Own lorries first and marked as such, same as the trip form. Numbers are
+     uppercased on the way out because older records can still be mixed case. */
+  const vehicleOptions = useMemo(() => {
+    const toOption = (vehicle) => ({
+      value: vehicle.vehicleNumber,
+      label: formatVehicleNumber(vehicle.vehicleNumber),
+      subtitle:
+        [vehicle.isOwn === true ? 'My vehicle' : null, vehicle.driverName, vehicle.mobileNumber]
+          .filter(Boolean)
+          .join(' · ') || undefined
+    });
+
+    return [
+      ...vehicles.filter((vehicle) => vehicle.isOwn === true).map(toOption),
+      ...vehicles.filter((vehicle) => vehicle.isOwn !== true).map(toOption)
+    ];
+  }, [vehicles]);
 
   const tripOptions = useMemo(
     () =>

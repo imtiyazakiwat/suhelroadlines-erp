@@ -17,10 +17,18 @@ import {
   differenceInCalendarDays
 } from 'date-fns';
 import { tripService, vehicleService, advanceService, villageService } from '../../services/firebaseService';
-import { toDate, isStrReceived, formatINR, formatCompactINR } from '../../services/homeService';
+import {
+  toDate,
+  isStrReceived,
+  formatINR,
+  formatCompactINR,
+  joinTripAdvances,
+  advanceWhen
+} from '../../services/homeService';
 import { VEHICLE_TYPES } from '../../types';
 import {
   normaliseVehicleNumber,
+  formatVehicleNumber,
   normaliseVillageName,
   suggestVillageCode,
   titleCase,
@@ -192,10 +200,11 @@ const inWindow = (value, from, to) => {
   return when >= from.getTime() && when <= to.getTime();
 };
 
-/** An advance belongs to the period it was advanced *for*, falling back to when
-    it was recorded. The old page filtered trips on `date` but advances on
-    `createdAt`, so an advance logged late silently left the totals. */
-const advanceWhen = (advance) => advance.tripDate || advance.createdAt;
+/* `advanceWhen` — an advance belongs to the period it was advanced *for*,
+   falling back to when it was recorded. The old page filtered trips on `date`
+   but advances on `createdAt`, so an advance logged late silently left the
+   totals. Shared from homeService, because the vehicle file screens have to date
+   an advance the same way or their totals will not match these. */
 
 const measureOf = (trip, measure) => {
   if (measure === 'trips') return 1;
@@ -288,64 +297,11 @@ const ReportsPage = () => {
 
   /* ------------------------------------------------------------------ join */
 
-  // One pass to index advances by trip, then one pass over trips. The synthetic
-  // "initial advance" stands in for trips whose opening advance was recorded on
-  // the trip itself rather than as its own document.
-  const joined = useMemo(() => {
-    const byTrip = new Map();
-    for (const advance of advances) {
-      if (!advance.tripId) continue;
-      const bucket = byTrip.get(advance.tripId);
-      if (bucket) bucket.push(advance);
-      else byTrip.set(advance.tripId, [advance]);
-    }
-
-    const synthetic = [];
-
-    const enriched = trips.map((trip) => {
-      const own = byTrip.get(trip.id) || [];
-
-      let initialList = own.filter((item) => item.advanceType === 'initial');
-      const additionalList = own.filter(
-        (item) => item.advanceType === 'additional' || (!item.advanceType && item.tripId)
-      );
-
-      const sum = (list) => list.reduce((total, item) => total + (Number(item.advanceAmount) || 0), 0);
-      let initialTotal = sum(initialList);
-      const additionalTotal = sum(additionalList);
-
-      if (Number(trip.advanceAmount) > 0 && initialTotal === 0) {
-        const stand_in = {
-          id: `trip-${trip.id}`,
-          tripId: trip.id,
-          vehicleNumber: trip.vehicleNumber,
-          tripDate: trip.date,
-          advanceAmount: Number(trip.advanceAmount) || 0,
-          advanceType: 'initial',
-          note: 'Opening advance recorded on the trip',
-          createdAt: trip.createdAt || trip.date,
-          synthetic: true
-        };
-        initialList = [stand_in];
-        initialTotal = stand_in.advanceAmount;
-        synthetic.push(stand_in);
-      }
-
-      return {
-        ...trip,
-        initialAdvances: initialList,
-        additionalAdvances: additionalList,
-        initialTotal,
-        additionalTotal,
-        totalAdvances: initialTotal + additionalTotal,
-        // Every record counted exactly once. The old version added the initial
-        // list length on top of a count that already included it.
-        advanceCount: initialList.length + additionalList.length
-      };
-    });
-
-    return { trips: enriched, advances: [...advances, ...synthetic] };
-  }, [trips, advances]);
+  // One pass to index advances by trip, then one pass over trips. Lives in
+  // homeService so the vehicle file screens compute the same figure from the
+  // same fields — two screens deriving "what this trip was advanced" separately
+  // is how the old Reports page came to disagree with itself.
+  const joined = useMemo(() => joinTripAdvances(trips, advances), [trips, advances]);
 
   /* ---------------------------------------------------------------- window */
 
@@ -586,8 +542,9 @@ const ReportsPage = () => {
     if (!values.date) next.date = 'Date is required';
     if (!values.villages.length) next.villages = 'Add at least one village';
     if (!values.quantity || parseFloat(values.quantity) <= 0) next.quantity = 'Enter a quantity';
-    if (!String(values.driverName).trim()) next.driverName = 'Driver name is required';
-    // Optional, but validated when present. See services/textService.js.
+    // Driver name and mobile are both optional: a trip is often recorded before
+    // the driver is assigned. Optional, but validated when present.
+    // See services/textService.js.
     const mobileProblem = mobileError(values.mobileNumber);
     if (mobileProblem) next.mobileNumber = mobileProblem;
     if (values.advanceAmount !== '' && parseFloat(values.advanceAmount) < 0)
@@ -610,11 +567,14 @@ const ReportsPage = () => {
       const previousAdvance = Number(detailTrip.advanceAmount) || 0;
       const difference = nextAdvance - previousAdvance;
       const when = parseLocalDate(draft.date) || new Date();
+      // Settled once, and reused: the trip, its advance and the vehicle book all
+      // have to agree on the number, or the trip stops matching its own vehicle.
+      const number = formatVehicleNumber(draft.vehicleNumber);
 
       await tripService.updateTrip(detailTrip.id, {
         slNumber: parseInt(draft.slNumber, 10) || detailTrip.slNumber || 0,
         date: when,
-        vehicleNumber: normaliseVehicleNumber(draft.vehicleNumber),
+        vehicleNumber: number,
         vehicleType: draft.vehicleType,
         // Written together, because isStrReceived() reads either field.
         strStatus: draft.strStatus,
@@ -629,7 +589,7 @@ const ReportsPage = () => {
       if (difference > 0) {
         await advanceService.addAdvance({
           tripId: detailTrip.id,
-          vehicleNumber: normaliseVehicleNumber(draft.vehicleNumber),
+          vehicleNumber: number,
           tripDate: when,
           advanceAmount: difference,
           advanceType: 'additional',
@@ -642,17 +602,25 @@ const ReportsPage = () => {
         toast('Advance reduced on the trip. The advance ledger was left unchanged.');
       }
 
-      const known = vehicles.find((item) => item.vehicleNumber === draft.vehicleNumber);
-      if (
-        !known ||
-        known.driverName !== draft.driverName ||
-        known.mobileNumber !== draft.mobileNumber
-      ) {
+      /* Keep the vehicle book in step, without letting a cleared field erase
+         what is on file. Now that the driver fields are optional, the old
+         `known.driverName !== draft.driverName` comparison was true on every
+         save (undefined vs '') and merged blanks over real values. `isOwn` is
+         left out on purpose: ownership is not decided from a trip edit. */
+      const driverName = titleCase(draft.driverName);
+      const mobileNumber = String(draft.mobileNumber).trim();
+      const known = vehicles.find((item) => sameText(item.vehicleNumber, number));
+
+      const changes = {};
+      if (driverName && !sameText(known?.driverName, driverName)) changes.driverName = driverName;
+      if (mobileNumber && String(known?.mobileNumber || '') !== mobileNumber)
+        changes.mobileNumber = mobileNumber;
+
+      if (!known || Object.keys(changes).length) {
         await vehicleService.addVehicle({
-          vehicleNumber: normaliseVehicleNumber(draft.vehicleNumber),
-          driverName: titleCase(draft.driverName),
-          mobileNumber: String(draft.mobileNumber).trim(),
+          vehicleNumber: number,
           vehicleType: draft.vehicleType,
+          ...changes,
           isActive: true
         });
       }
@@ -695,7 +663,7 @@ const ReportsPage = () => {
     const rows = visibleTrips.map((trip) => ({
       'SL Number': trip.slNumber ?? '',
       Date: dateText(trip.date),
-      'Vehicle Number': trip.vehicleNumber || '',
+      'Vehicle Number': formatVehicleNumber(trip.vehicleNumber),
       'Vehicle Type': trip.vehicleType || 'lorry',
       'STR Number': trip.strNumber || '',
       'STR Status': isStrReceived(trip) ? 'Received' : 'not received',
@@ -892,7 +860,7 @@ const ReportsPage = () => {
                 key={row.vehicleNumber}
                 icon={<TruckIcon size={17} />}
                 iconTone="brand"
-                title={row.vehicleNumber}
+                title={formatVehicleNumber(row.vehicleNumber)}
                 subtitle={`${row.trips} ${row.trips === 1 ? 'trip' : 'trips'}`}
                 value={formatMeasure(row.value)}
               >
@@ -961,7 +929,7 @@ const ReportsPage = () => {
                     key={trip.id}
                     icon={received ? <DocCheckIcon size={17} /> : <DocAlertIcon size={17} />}
                     iconTone={received ? 'success' : 'danger'}
-                    title={trip.vehicleNumber}
+                    title={formatVehicleNumber(trip.vehicleNumber)}
                     subtitle={`#${trip.slNumber ?? '—'} · ${trip.driverName || 'No driver'}`}
                     detail={`${dateText(trip.date)}${
                       trip.villages?.length ? ` · ${trip.villages.join(', ')}` : ''
@@ -989,7 +957,7 @@ const ReportsPage = () => {
                 key={item.id}
                 icon={<WalletIcon size={17} />}
                 iconTone={item.advanceType === 'initial' ? 'accent' : 'brand'}
-                title={item.vehicleNumber || '—'}
+                title={formatVehicleNumber(item.vehicleNumber) || '—'}
                 subtitle={item.advanceType === 'initial' ? 'Opening advance' : 'Top-up'}
                 detail={`${dateText(advanceWhen(item))}${item.note ? ` · ${item.note}` : ''}`}
                 value={formatINR(item.advanceAmount)}
@@ -1081,7 +1049,7 @@ const ReportsPage = () => {
       <Sheet
         open={Boolean(detailTrip) && !draft}
         onClose={() => setDetailTrip(null)}
-        title={detailTrip?.vehicleNumber || 'Trip'}
+        title={formatVehicleNumber(detailTrip?.vehicleNumber) || 'Trip'}
         subtitle={detailTrip ? `#${detailTrip.slNumber ?? '—'} · ${dateText(detailTrip.date)}` : ''}
         detent="large"
         primaryAction={
@@ -1102,7 +1070,7 @@ const ReportsPage = () => {
 
             <ListSection inset={false} header="Trip">
               <ListRow title="Date" value={dateText(detailTrip.date)} />
-              <ListRow title="Vehicle" value={detailTrip.vehicleNumber || '—'} />
+              <ListRow title="Vehicle" value={formatVehicleNumber(detailTrip.vehicleNumber) || '—'} />
               <ListRow title="Type" value={detailTrip.vehicleType || 'lorry'} />
               <ListRow title="Quantity" value={String(detailTrip.quantity ?? '—')} />
               <ListRow title="Villages" value={(detailTrip.villages || []).join(', ') || '—'} />
@@ -1248,17 +1216,15 @@ const ReportsPage = () => {
               </ListRow>
             </ListSection>
 
-            <ListSection
-              inset={false}
-              header="Driver"
-              footer={errors.driverName || errors.mobileNumber}
-            >
+            {/* Hint only: the mobile error is rendered by the field itself, and
+                printing it here as well showed the same message twice. */}
+            <ListSection inset={false} header="Driver" footer="Both are optional.">
               <ListRow>
                 <TextField
                   label="Name"
                   layout="row"
                   value={draft.driverName}
-                  error={errors.driverName}
+                  placeholder="Optional"
                   onChange={(event) => setDraft((prev) => ({ ...prev, driverName: event.target.value }))}
                 />
               </ListRow>
@@ -1303,9 +1269,9 @@ const ReportsPage = () => {
         open={Boolean(pendingDelete)}
         onClose={() => setPendingDelete(null)}
         title="Delete this trip?"
-        message={`Trip #${pendingDelete?.slNumber ?? ''} for ${
-          pendingDelete?.vehicleNumber ?? ''
-        } will be removed. Its advance records stay on file. This cannot be undone.`}
+        message={`Trip #${pendingDelete?.slNumber ?? ''} for ${formatVehicleNumber(
+          pendingDelete?.vehicleNumber
+        )} will be removed. Its advance records stay on file. This cannot be undone.`}
         confirmLabel="Delete"
         destructive
         onConfirm={confirmDelete}

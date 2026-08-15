@@ -20,6 +20,7 @@ import {
 import useCommitAction from '../Layout/useCommitAction';
 import {
   normaliseVehicleNumber,
+  formatVehicleNumber,
   normaliseVillageName,
   suggestVillageCode,
   titleCase,
@@ -101,15 +102,42 @@ const AddEntryForm = () => {
     setErrors((prev) => (prev[field] ? { ...prev, [field]: null } : prev));
   }, []);
 
-  const vehicleOptions = useMemo(
-    () =>
-      vehicles.map((vehicle) => ({
-        value: vehicle.vehicleNumber,
-        label: vehicle.vehicleNumber,
-        subtitle: [vehicle.driverName, vehicle.mobileNumber].filter(Boolean).join(' · ')
-      })),
-    [vehicles]
-  );
+  /* Own lorries first, and labelled, because they are the ones dispatched most
+     and the ones whose number is being looked for. The marker goes in the
+     subtitle rather than the label so the label stays exactly the number — the
+     Picker matches typed text against both, so "my" finds the own fleet. */
+  const vehicleOptions = useMemo(() => {
+    const toOption = (vehicle) => ({
+      value: vehicle.vehicleNumber,
+      label: formatVehicleNumber(vehicle.vehicleNumber),
+      subtitle:
+        [vehicle.isOwn === true ? 'My vehicle' : null, vehicle.driverName, vehicle.mobileNumber]
+          .filter(Boolean)
+          .join(' · ') || undefined
+    });
+
+    const options = [
+      ...vehicles.filter((vehicle) => vehicle.isOwn === true).map(toOption),
+      ...vehicles.filter((vehicle) => vehicle.isOwn !== true).map(toOption)
+    ];
+
+    /* A number typed in rather than chosen is not in the list, and the Picker
+       shows its placeholder for a value it cannot find — so entering a brand new
+       vehicle left the field reading "Select vehicle" as if nothing had been
+       entered. Adding it as an option makes the choice visible. */
+    if (
+      formData.vehicleNumber &&
+      !options.some((option) => sameText(option.value, formData.vehicleNumber))
+    ) {
+      options.unshift({
+        value: formData.vehicleNumber,
+        label: formatVehicleNumber(formData.vehicleNumber),
+        subtitle: 'New vehicle'
+      });
+    }
+
+    return options;
+  }, [vehicles, formData.vehicleNumber]);
 
   const villageOptions = useMemo(
     () =>
@@ -125,20 +153,44 @@ const AddEntryForm = () => {
     [allVillages]
   );
 
-  /** Picking a known vehicle carries its driver and mobile across. */
+  /** Picking a known vehicle carries its driver, mobile and type across. */
   const handleVehiclePick = (vehicleNumber) => {
     const vehicle = vehicles.find((item) => item.vehicleNumber === vehicleNumber);
     setFormData((prev) => ({
       ...prev,
       vehicleNumber,
       driverName: vehicle?.driverName || prev.driverName,
-      mobileNumber: vehicle?.mobileNumber || prev.mobileNumber
+      mobileNumber: vehicle?.mobileNumber || prev.mobileNumber,
+      // Type came across as whatever the segmented control happened to be
+      // showing, and the save path writes the form's type back to the vehicle —
+      // so picking a tempo and saving quietly reclassified it as a lorry.
+      vehicleType: vehicle?.vehicleType || prev.vehicleType
     }));
     setErrors((prev) => ({ ...prev, vehicleNumber: null }));
   };
 
+  /**
+   * A number typed in rather than chosen. Nothing is written yet — the vehicle is
+   * created as part of saving the trip, so a half-entered form leaves no record
+   * behind.
+   *
+   * The driver fields are cleared, not left alone: picking KA 01 prefilled its
+   * driver, and typing a different number afterwards carried that driver across
+   * and then saved him onto the new vehicle. A number that is already on file
+   * (reached here when the spelling differs only by case) still prefills.
+   */
   const handleVehicleCreate = (vehicleNumber) => {
-    setField('vehicleNumber', normaliseVehicleNumber(vehicleNumber));
+    const number = normaliseVehicleNumber(vehicleNumber);
+    const known = vehicles.find((item) => sameText(item.vehicleNumber, number));
+
+    setFormData((prev) => ({
+      ...prev,
+      vehicleNumber: number,
+      driverName: known?.driverName || '',
+      mobileNumber: known?.mobileNumber || '',
+      vehicleType: known?.vehicleType || prev.vehicleType
+    }));
+    setErrors((prev) => ({ ...prev, vehicleNumber: null }));
   };
 
   const handleVillagesChange = (next, option) => {
@@ -192,15 +244,20 @@ const AddEntryForm = () => {
   const validate = () => {
     const next = {};
 
-    if (!formData.vehicleNumber.trim()) next.vehicleNumber = 'Vehicle number is required';
-    if (!formData.strNumber?.trim()) next.strNumber = 'STR status is required';
-    if (!formData.vehicleType) next.vehicleType = 'Vehicle type is required';
-    if (formData.villages.length === 0) next.villages = 'Add at least one village';
-    if (!formData.driverName.trim()) next.driverName = 'Driver name is required';
+    /* Two fields are genuinely required: which vehicle, and where it is going.
+       Everything else either has a working default or is optional.
 
-    // Mobile is optional: plenty of trips are booked without one, and refusing
-    // to save the whole trip over a missing phone number blocked real work. A
-    // value that *is* entered still has to be a real number.
+       The STR-status and vehicle-type checks that used to sit here could never
+       fire — both are set from a Segmented control that is always on one of its
+       options and both default in the service — so they were two more strings to
+       read past on a form people fill in twenty times a day. */
+    if (!formData.vehicleNumber.trim()) next.vehicleNumber = 'Vehicle number is required';
+    if (formData.villages.length === 0) next.villages = 'Add at least one village';
+
+    // Driver name and mobile are both optional: plenty of trips are booked
+    // before the driver is assigned, and refusing to save the whole trip over a
+    // missing name or phone number blocked real work. A mobile number that *is*
+    // entered still has to be a real one.
     const mobileProblem = mobileError(formData.mobileNumber);
     if (mobileProblem) next.mobileNumber = mobileProblem;
 
@@ -225,10 +282,12 @@ const AddEntryForm = () => {
     const startedAt = performance.now();
 
     try {
+      const number = formatVehicleNumber(formData.vehicleNumber);
+
       const tripData = createTripEntry({
         slNumber: parseInt(formData.slNumber, 10),
         date: new Date(formData.date),
-        vehicleNumber: normaliseVehicleNumber(formData.vehicleNumber),
+        vehicleNumber: number,
         strNumber: formData.strNumber.trim(),
         vehicleType: formData.vehicleType,
         villages: formData.villages,
@@ -238,25 +297,58 @@ const AddEntryForm = () => {
         advanceAmount: parseFloat(formData.advanceAmount) || 0
       });
 
+      // The trip, and — when an amount was entered — its opening advance, which
+      // tripService.addTrip writes as an `initial` advance in the same pass. That
+      // is the whole reason the amount is on this form: the ledger stays correct
+      // without a second trip to Add Advance.
       await tripService.addTrip(tripData);
 
-      // Keep the vehicle book in step with whatever was entered here.
-      const existing = vehicles.find((item) => item.vehicleNumber === formData.vehicleNumber);
-      if (
-        !existing ||
-        existing.driverName !== formData.driverName ||
-        existing.mobileNumber !== formData.mobileNumber
-      ) {
-        await vehicleService.addVehicle({
-          vehicleNumber: normaliseVehicleNumber(formData.vehicleNumber),
-          driverName: titleCase(formData.driverName),
-          mobileNumber: formData.mobileNumber.trim(),
-          vehicleType: formData.vehicleType,
-          isActive: true
-        });
+      /* Book-keeping, in its own try: the trip is already saved by this point, so
+         a failure here must not be reported as "could not save the trip". It used
+         to share the outer catch and did exactly that — the trip was on file and
+         the screen said it was not.
+
+         Keep the vehicle book in step with whatever was entered here, without
+         letting a blank field erase what is already on file. The old version
+         compared `existing.driverName !== formData.driverName` and wrote the
+         form's values straight over the record: with the driver fields now
+         optional, that compares undefined against '' — true every time — and
+         then merged an empty name over a real one. Only values that are present
+         and actually different are written.
+
+         `isOwn` is deliberately absent from the payload: the merge would
+         otherwise reset a vehicle's ownership every time a trip was logged for
+         it, and the trip form is not where that gets decided. */
+      let bookNote = null;
+      try {
+        const driverName = titleCase(formData.driverName);
+        const mobileNumber = formData.mobileNumber.trim();
+        const existing = vehicles.find((item) => sameText(item.vehicleNumber, number));
+
+        const changes = {};
+        if (driverName && !sameText(existing?.driverName, driverName))
+          changes.driverName = driverName;
+        if (mobileNumber && String(existing?.mobileNumber || '') !== mobileNumber)
+          changes.mobileNumber = mobileNumber;
+
+        if (!existing || Object.keys(changes).length) {
+          await vehicleService.addVehicle({
+            vehicleNumber: number,
+            // Always sent, because addVehicle defaults a missing type to 'lorry'
+            // and would reclassify the vehicle on merge. It is prefilled from the
+            // vehicle when one is picked, so this is its own value round-tripping.
+            vehicleType: formData.vehicleType,
+            ...changes,
+            isActive: true
+          });
+        }
+      } catch (bookError) {
+        console.error('Trip saved, but the vehicle list could not be updated:', bookError);
+        bookNote = 'The vehicle list could not be updated.';
       }
 
-      toast.success(`Trip saved in ${Math.round(performance.now() - startedAt)} ms`);
+      if (bookNote) toast(`Trip saved. ${bookNote}`);
+      else toast.success(`Trip saved in ${Math.round(performance.now() - startedAt)} ms`);
       navigate('/');
     } catch (error) {
       console.error('Error adding trip entry:', error);
@@ -297,7 +389,14 @@ const AddEntryForm = () => {
         </div>
       </Card>
 
-      <ListSection header="Vehicle" footer={errors.vehicleNumber || errors.driverName || errors.mobileNumber}>
+      {/* The footer carries the hint only. Field errors are rendered by the
+          controls themselves, next to the input that is wrong and wired to
+          aria-invalid; repeating them here printed every message twice, one line
+          apart, and pushed the hint out of view exactly when it was needed. */}
+      <ListSection
+        header="Vehicle"
+        footer="Driver name and mobile are optional. A number that is not on the list is added to your vehicles when the trip is saved."
+      >
         <ListRow>
           <Picker
             label="Number"
@@ -306,7 +405,10 @@ const AddEntryForm = () => {
             options={vehicleOptions}
             onChange={handleVehiclePick}
             onCreate={handleVehicleCreate}
-            createLabel="Use"
+            /* "Add", not "Use": the row does add the vehicle, and a label that
+               describes the consequence is what makes the automatic save
+               predictable rather than surprising. */
+            createLabel="Add"
             searchable
             searchPlaceholder="Search or type a new number"
             placeholder="Select vehicle"
@@ -330,10 +432,9 @@ const AddEntryForm = () => {
             layout="row"
             value={formData.driverName}
             onChange={(e) => setField('driverName', e.target.value)}
-            placeholder="Full name"
+            placeholder="Optional"
             autoCapitalize="words"
             autoComplete="off"
-            error={errors.driverName}
           />
         </ListRow>
 
@@ -343,18 +444,24 @@ const AddEntryForm = () => {
             layout="row"
             value={formData.mobileNumber}
             onChange={(e) => setField('mobileNumber', e.target.value)}
-            placeholder="10 digits"
+            placeholder="Optional"
             error={errors.mobileNumber}
           />
         </ListRow>
       </ListSection>
 
-      <ListSection header="Route" footer={errors.villages}>
-        <ListRow
-          title="Villages"
-          value={formData.villages.length ? `${formData.villages.length} added` : undefined}
-        />
-
+      <ListSection
+        header="Route"
+        footer={
+          errors.villages ||
+          'Type a village that is not listed and it is added to your villages, with a code suggested from the name.'
+        }
+      >
+        {/* The chips *are* the value, so they come first and the picker below
+            them is the action that adds more — the shape Calendar uses for
+            guests. There used to be a third row above these reading
+            "Villages — 2 added": a count sitting directly on top of the list it
+            was counting, which is the same quantity stated twice. */}
         {formData.villages.length > 0 && (
           <ListRow className="entry__chips-row">
             <div className="entry__chips">
@@ -376,10 +483,14 @@ const AddEntryForm = () => {
             options={villageOptions}
             onChange={handleVillagesChange}
             onCreate={handleVillageCreate}
-            createLabel="Create"
+            createLabel="Add"
             searchable
-            searchPlaceholder="Search villages"
+            searchPlaceholder="Search or type a new village"
             placeholder="Choose"
+            /* The chips above are the value, so this row is the action. Without
+               the override the trigger would read "2 selected" directly beneath
+               the two chips it is counting. */
+            summary={formData.villages.length ? 'Add more' : 'Choose'}
           />
         </ListRow>
 
@@ -395,7 +506,14 @@ const AddEntryForm = () => {
         </ListRow>
       </ListSection>
 
-      <ListSection header="Advance & STR" footer={errors.advanceAmount}>
+      <ListSection
+        header="Advance & STR"
+        footer={
+          parseFloat(formData.advanceAmount) > 0
+            ? 'Recorded as this trip’s opening advance, so it appears in the ledger and in Reports without a second entry.'
+            : 'Leave the advance empty if nothing has been paid yet. Top-ups are added later from Add Advance.'
+        }
+      >
         <ListRow>
           <CurrencyField
             label="Advance"

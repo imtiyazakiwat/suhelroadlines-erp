@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { tripService, vehicleService, villageService } from '../../services/firebaseService';
 import { formatINR, relativeDayLabel, isStrReceived } from '../../services/homeService';
+import { formatVehicleNumber } from '../../services/textService';
 import { Sheet, SearchField, Segmented, ListSection, ListRow, Badge, EmptyState } from '../../ui';
 import { TruckIcon, DocCheckIcon, DocAlertIcon } from './Icons';
 import './SearchOverlay.css';
@@ -126,7 +127,9 @@ const SearchOverlay = ({ open, onClose }) => {
                 key={trip.id}
                 icon={paid ? <DocCheckIcon size={17} /> : <DocAlertIcon size={17} />}
                 iconTone={paid ? 'success' : 'danger'}
-                title={`${trip.vehicleNumber}${trip.slNumber ? ` · #${trip.slNumber}` : ''}`}
+                title={`${formatVehicleNumber(trip.vehicleNumber)}${
+                  trip.slNumber ? ` · #${trip.slNumber}` : ''
+                }`}
                 subtitle={`${trip.driverName || 'No driver'} · ${relativeDayLabel(trip.date)}`}
                 badge={<Badge tone={paid ? 'success' : 'danger'}>{paid ? 'Paid' : 'Due'}</Badge>}
                 onClick={() => go(paid ? '/str-status?filter=paid' : '/str-status?filter=due')}
@@ -144,7 +147,7 @@ const SearchOverlay = ({ open, onClose }) => {
               key={vehicle.vehicleNumber}
               icon={<TruckIcon size={17} />}
               iconTone="brand"
-              title={vehicle.vehicleNumber}
+              title={formatVehicleNumber(vehicle.vehicleNumber)}
               subtitle={`${vehicle.driverName || 'No driver'}${
                 vehicle.mobileNumber ? ` · ${vehicle.mobileNumber}` : ''
               }`}

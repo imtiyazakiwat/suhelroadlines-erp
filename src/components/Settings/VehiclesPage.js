@@ -14,15 +14,16 @@ import {
   EmptyState,
   Skeleton,
   Sheet,
+  ActionSheet,
   Alert,
   useToast
 } from '../../ui';
 import {
   normaliseVehicleNumber,
+  formatVehicleNumber,
   titleCase,
   mobileError,
-  sameText,
-  tidy
+  sameText
 } from '../../services/textService';
 import { TruckIcon, PlusIcon } from '../Common/Icons';
 import './SettingsPage.css';
@@ -33,6 +34,26 @@ import './SettingsPage.css';
    One modal layer: tapping a row opens the editor sheet directly, with no
    manager sheet underneath it. The add action is a row closing the list, the way
    Settings offers Add Account, rather than a floating button or a nav bar plus.
+
+   Own vs hired
+   ------------
+   The list is split into "My vehicles" and "Other vehicles" instead of gaining a
+   second filter control. Recognition over recall: both groups stay on screen, so
+   the answer to "how many of these are mine" is visible without a decision, and
+   the split costs no extra tap. A segmented control would have hidden one group
+   behind the other and would have had to fight the status filter above it for
+   meaning.
+
+   Removing a vehicle
+   ------------------
+   Two different intentions were sharing one button. "Remove vehicle" set
+   isActive: false and called it a delete, so a vehicle the user had asked to get
+   rid of kept turning up in this list forever. They are now separate, offered
+   together from one row, reversible option first:
+
+     Deactivate         keeps the record and its history, stops it being offered
+                        on the trip form. Undo is the same menu.
+     Delete permanently second confirmation, and it really deletes.
    ========================================================================== */
 
 const VEHICLE_TYPES = [
@@ -52,8 +73,14 @@ const EMPTY = {
   driverName: '',
   mobileNumber: '',
   vehicleType: 'lorry',
+  // Defaults to false, not true: a new vehicle has not been asked yet, and
+  // pre-ticking "mine" would put hired lorries in the wrong group by default.
+  isOwn: false,
   isActive: true
 };
+
+/** Missing field means "never marked", which is not the same as "mine". */
+const isOwnVehicle = (vehicle) => vehicle?.isOwn === true;
 
 const VehiclesPage = () => {
   const toast = useToast();
@@ -66,6 +93,10 @@ const VehiclesPage = () => {
   const [draft, setDraft] = useState(null);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  // Three separate pieces of state because they are three separate steps:
+  // the menu of removal options, and the final confirmation for the one that
+  // cannot be undone.
+  const [removing, setRemoving] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
 
   const load = useCallback(async () => {
@@ -107,6 +138,23 @@ const VehiclesPage = () => {
       .sort((a, b) => String(a.vehicleNumber).localeCompare(String(b.vehicleNumber)));
   }, [vehicles, query, filter]);
 
+  /* Own vehicles first, because they are the ones being dispatched daily and the
+     ones this list is opened to check. A group with nothing in it is dropped
+     rather than shown empty — an "Other vehicles" header over blank space would
+     imply records that are not there. */
+  const groups = useMemo(
+    () =>
+      [
+        { key: 'own', header: 'My vehicles', items: visible.filter(isOwnVehicle) },
+        {
+          key: 'other',
+          header: 'Other vehicles',
+          items: visible.filter((item) => !isOwnVehicle(item))
+        }
+      ].filter((group) => group.items.length > 0),
+    [visible]
+  );
+
   const openNew = () => {
     setErrors({});
     setDraft({ ...EMPTY });
@@ -120,6 +168,7 @@ const VehiclesPage = () => {
       driverName: vehicle.driverName || '',
       mobileNumber: vehicle.mobileNumber || '',
       vehicleType: vehicle.vehicleType || 'lorry',
+      isOwn: isOwnVehicle(vehicle),
       isActive: vehicle.isActive !== false
     });
   };
@@ -132,21 +181,23 @@ const VehiclesPage = () => {
   };
 
   const save = async () => {
-    const number = normaliseVehicleNumber(draft.vehicleNumber);
+    // Settled form: uppercase and trimmed. The number is the document id, so a
+    // stray trailing space would create a second vehicle that could never be
+    // reconciled with the first.
+    const number = formatVehicleNumber(draft.vehicleNumber);
     const next = {};
 
-    if (!number.trim()) next.vehicleNumber = 'Vehicle number is required';
-    else if (
-      !draft.existing &&
-      vehicles.some((item) => sameText(item.vehicleNumber, number))
-    ) {
+    if (!number) next.vehicleNumber = 'Vehicle number is required';
+    else if (!draft.existing && vehicles.some((item) => sameText(item.vehicleNumber, number))) {
       // The service writes with merge on a doc keyed by the number, so without
       // this a duplicate silently overwrote the existing vehicle.
       next.vehicleNumber = 'That vehicle number is already on record';
     }
 
-    if (!tidy(draft.driverName)) next.driverName = 'Driver name is required';
-
+    // Driver name and mobile number are both optional. A vehicle is often on the
+    // books before anyone knows who is driving it, and refusing to record the
+    // vehicle over a missing name meant the number never got entered at all.
+    // A mobile number that *is* given still has to be a real one.
     const mobileProblem = mobileError(draft.mobileNumber);
     if (mobileProblem) next.mobileNumber = mobileProblem;
 
@@ -159,12 +210,13 @@ const VehiclesPage = () => {
         driverName: titleCase(draft.driverName),
         mobileNumber: String(draft.mobileNumber || '').trim(),
         vehicleType: draft.vehicleType,
+        isOwn: draft.isOwn === true,
         isActive: draft.isActive
       };
 
       if (draft.existing) {
         await vehicleService.updateVehicle(draft.existing, payload);
-        toast.success(`${draft.existing} updated`);
+        toast.success(`${formatVehicleNumber(draft.existing)} updated`);
       } else {
         await vehicleService.addVehicle({ ...payload, vehicleNumber: number });
         toast.success(`${number} added`);
@@ -180,17 +232,35 @@ const VehiclesPage = () => {
     }
   };
 
+  /** Reversible, so it applies straight away and says how to undo it. */
+  const setActive = async (vehicle, active) => {
+    try {
+      await vehicleService.deactivateVehicle(vehicle.vehicleNumber, active);
+      toast.success(
+        active
+          ? `${formatVehicleNumber(vehicle.vehicleNumber)} is active again`
+          : `${formatVehicleNumber(vehicle.vehicleNumber)} deactivated`
+      );
+      setDraft(null);
+      await load();
+    } catch (error) {
+      console.error('Error changing vehicle status:', error);
+      toast.error(error?.message || 'Could not change the vehicle');
+    }
+  };
+
   const confirmDelete = async () => {
     const vehicle = pendingDelete;
     if (!vehicle) return;
 
     try {
       await vehicleService.deleteVehicle(vehicle.vehicleNumber);
-      toast.success(`${vehicle.vehicleNumber} removed`);
+      toast.success(`${formatVehicleNumber(vehicle.vehicleNumber)} deleted`);
+      setDraft(null);
       await load();
     } catch (error) {
-      console.error('Error removing vehicle:', error);
-      toast.error(error?.message || 'Could not remove the vehicle');
+      console.error('Error deleting vehicle:', error);
+      toast.error(error?.message || 'Could not delete the vehicle');
     } finally {
       setPendingDelete(null);
     }
@@ -249,28 +319,42 @@ const VehiclesPage = () => {
           />
         </ListSection>
       ) : (
-        <ListSection
-          inset={false}
-          className="stg26"
-          header={`${visible.length} ${visible.length === 1 ? 'vehicle' : 'vehicles'}`}
-          key={filter}
-        >
-          {visible.map((vehicle) => (
-            <ListRow
-              key={vehicle.vehicleNumber}
-              icon={<TruckIcon size={17} />}
-              iconTone={vehicle.isActive === false ? 'neutral' : 'brand'}
-              title={vehicle.vehicleNumber}
-              subtitle={
-                [vehicle.driverName, vehicle.mobileNumber].filter(Boolean).join(' · ') ||
-                'No driver on file'
-              }
-              badge={vehicle.isActive === false ? <Badge tone="neutral">Inactive</Badge> : null}
-              chevron
-              onClick={() => openEdit(vehicle)}
-            />
-          ))}
-        </ListSection>
+        groups.map((group, index) => (
+          <ListSection
+            inset={false}
+            className="stg26"
+            header={group.header}
+            /* The footer sits under the last group only, so the explanation of
+               the split is the final word rather than an interruption. */
+            footer={
+              index === groups.length - 1
+                ? 'Open a vehicle and turn on “My vehicle” to list it under My vehicles.'
+                : undefined
+            }
+            key={`${filter}-${group.key}`}
+          >
+            {group.items.map((vehicle) => (
+              <ListRow
+                key={vehicle.vehicleNumber}
+                icon={<TruckIcon size={17} />}
+                iconTone={vehicle.isActive === false ? 'neutral' : 'brand'}
+                /* Uppercased on the way out as well as on the way in: records
+                   written before normalisation existed can still be mixed case,
+                   and a number plate is uppercase on every permit and STR. */
+                title={formatVehicleNumber(vehicle.vehicleNumber)}
+                subtitle={
+                  [vehicle.driverName, vehicle.mobileNumber].filter(Boolean).join(' · ') ||
+                  'No driver on file'
+                }
+                badge={
+                  vehicle.isActive === false ? <Badge tone="neutral">Inactive</Badge> : null
+                }
+                chevron
+                onClick={() => openEdit(vehicle)}
+              />
+            ))}
+          </ListSection>
+        ))
       )}
 
       <ListSection inset={false}>
@@ -301,7 +385,15 @@ const VehiclesPage = () => {
       >
         {draft && (
           <>
-            <ListSection inset={false} footer={errors.vehicleNumber}>
+            {/* Identity: which vehicle this is, and whose. Both answer the same
+                question, so they share a section rather than adding a fourth. */}
+            <ListSection
+              inset={false}
+              footer={
+                errors.vehicleNumber ||
+                'Turn on My vehicle for lorries you own, so they list apart from hired ones.'
+              }
+            >
               <ListRow>
                 <TextField
                   label="Number"
@@ -320,12 +412,22 @@ const VehiclesPage = () => {
                   data-autofocus={draft.existing ? undefined : true}
                 />
               </ListRow>
+              <ListRow
+                title="My vehicle"
+                accessory={
+                  <Switch
+                    checked={draft.isOwn}
+                    onChange={(value) => setField('isOwn', value)}
+                    label="My vehicle"
+                  />
+                }
+              />
             </ListSection>
 
             <ListSection
               inset={false}
               header="Driver"
-              footer={errors.driverName || errors.mobileNumber || 'Mobile number is optional.'}
+              footer={errors.mobileNumber || 'Both are optional. Add them when you know them.'}
             >
               <ListRow>
                 <TextField
@@ -333,9 +435,8 @@ const VehiclesPage = () => {
                   layout="row"
                   value={draft.driverName}
                   onChange={(event) => setField('driverName', event.target.value)}
-                  placeholder="Full name"
+                  placeholder="Optional"
                   autoCapitalize="words"
-                  error={errors.driverName}
                 />
               </ListRow>
               <ListRow>
@@ -378,10 +479,19 @@ const VehiclesPage = () => {
 
             {draft.existing && (
               <ListSection inset={false}>
+                {/* One row, two intentions behind it. The choice between keeping
+                    the record and destroying it belongs in the menu, where both
+                    can be described, not split across two rows a thumb can
+                    confuse. */}
                 <ListRow
-                  title="Remove vehicle"
+                  title="Remove vehicle…"
                   destructive
-                  onClick={() => setPendingDelete({ vehicleNumber: draft.existing })}
+                  onClick={() =>
+                    setRemoving({
+                      vehicleNumber: draft.existing,
+                      isActive: draft.isActive
+                    })
+                  }
                 />
               </ListSection>
             )}
@@ -389,12 +499,35 @@ const VehiclesPage = () => {
         )}
       </Sheet>
 
+      <ActionSheet
+        open={Boolean(removing)}
+        onClose={() => setRemoving(null)}
+        title={removing ? formatVehicleNumber(removing.vehicleNumber) : ''}
+        message="Deactivating keeps the record and its trips, and can be undone. Deleting cannot."
+        actions={
+          removing
+            ? [
+                removing.isActive
+                  ? { label: 'Deactivate', onSelect: () => setActive(removing, false) }
+                  : { label: 'Reactivate', onSelect: () => setActive(removing, true) },
+                {
+                  label: 'Delete Permanently',
+                  destructive: true,
+                  onSelect: () => setPendingDelete(removing)
+                }
+              ]
+            : []
+        }
+      />
+
       <Alert
         open={Boolean(pendingDelete)}
         onClose={() => setPendingDelete(null)}
-        title="Remove this vehicle?"
-        message={`${pendingDelete?.vehicleNumber} will stop appearing in the trip form. Existing trips keep their history.`}
-        confirmLabel="Remove"
+        title="Delete this vehicle?"
+        message={`${formatVehicleNumber(
+          pendingDelete?.vehicleNumber
+        )} will be removed from the vehicle list. Trips and advances already recorded against it are kept. This cannot be undone.`}
+        confirmLabel="Delete"
         destructive
         onConfirm={confirmDelete}
       />

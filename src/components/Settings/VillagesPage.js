@@ -10,6 +10,7 @@ import {
   EmptyState,
   Skeleton,
   Sheet,
+  ActionSheet,
   Alert,
   useToast
 } from '../../ui';
@@ -32,6 +33,13 @@ import './SettingsPage.css';
 
    Names are stored Title Cased and matched case-insensitively. Before that,
    "bagalkot" and "Bagalkot" were two villages and both showed up in the picker.
+
+   Removing a village offers the same two options as vehicles, for the same
+   reason: "Remove village" used to mean isActive: false, which is a deactivation
+   and not what the label promised. Deactivated villages are listed here with an
+   Inactive badge so the state can be seen and reversed — they were previously
+   filtered out of this screen entirely, which made the badge unreachable code
+   and deactivation a one-way door.
    ========================================================================== */
 
 const VillagesPage = () => {
@@ -44,6 +52,7 @@ const VillagesPage = () => {
   const [draft, setDraft] = useState(null);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
 
   const load = useCallback(async () => {
@@ -62,15 +71,23 @@ const VillagesPage = () => {
     load();
   }, [load]);
 
-  const active = useMemo(() => villages.filter((item) => item.isActive !== false), [villages]);
+  /* Active first, then deactivated. Ordering within each half is the usage
+     ordering the service already applied, so the busiest stay at the top. */
+  const ordered = useMemo(
+    () => [
+      ...villages.filter((item) => item.isActive !== false),
+      ...villages.filter((item) => item.isActive === false)
+    ],
+    [villages]
+  );
 
   const visible = useMemo(() => {
     const term = query.trim().toLowerCase();
-    if (!term) return active;
-    return active.filter((item) =>
+    if (!term) return ordered;
+    return ordered.filter((item) =>
       `${item.villageName || ''} ${item.code || ''}`.toLowerCase().includes(term)
     );
-  }, [active, query]);
+  }, [ordered, query]);
 
   const openNew = () => {
     setErrors({});
@@ -83,6 +100,7 @@ const VillagesPage = () => {
       id: village.id,
       villageName: village.villageName || '',
       code: village.code || '',
+      isActive: village.isActive !== false,
       codeTouched: true
     });
   };
@@ -145,17 +163,31 @@ const VillagesPage = () => {
     }
   };
 
+  /** Reversible, so it applies immediately from the removal menu. */
+  const setActive = async (village, active) => {
+    try {
+      await villageService.deactivateVillage(village.id, active);
+      toast.success(`${village.villageName} ${active ? 'is active again' : 'deactivated'}`);
+      setDraft(null);
+      await load();
+    } catch (error) {
+      console.error('Error changing village status:', error);
+      toast.error(error?.message || 'Could not change the village');
+    }
+  };
+
   const confirmDelete = async () => {
     const village = pendingDelete;
     if (!village) return;
 
     try {
       await villageService.deleteVillage(village.id);
-      toast.success(`${village.villageName} removed`);
+      toast.success(`${village.villageName} deleted`);
+      setDraft(null);
       await load();
     } catch (error) {
-      console.error('Error removing village:', error);
-      toast.error(error?.message || 'Could not remove the village');
+      console.error('Error deleting village:', error);
+      toast.error(error?.message || 'Could not delete the village');
     } finally {
       setPendingDelete(null);
     }
@@ -210,15 +242,19 @@ const VillagesPage = () => {
           inset={false}
           className="stg26"
           header={`${visible.length} ${visible.length === 1 ? 'village' : 'villages'}`}
-          footer="Ordered by how often each is used, so the busiest are easiest to find."
+          footer="Active villages first, then by how often each is used, so the busiest are easiest to find."
         >
           {visible.map((village) => (
             <ListRow
               key={village.id}
               icon={<MapPinIcon size={17} />}
-              iconTone="accent"
+              iconTone={village.isActive === false ? 'neutral' : 'accent'}
               title={village.villageName}
-              subtitle={`Used ${village.usageCount || 0}×`}
+              subtitle={
+                village.isActive === false
+                  ? `Inactive · used ${village.usageCount || 0}×`
+                  : `Used ${village.usageCount || 0}×`
+              }
               badge={
                 village.code ? (
                   <Badge tone="neutral" className="fleet__code">
@@ -299,20 +335,47 @@ const VillagesPage = () => {
         {draft?.id && (
           <ListSection inset={false}>
             <ListRow
-              title="Remove village"
+              title="Remove village…"
               destructive
-              onClick={() => setPendingDelete({ id: draft.id, villageName: draft.villageName })}
+              onClick={() =>
+                setRemoving({
+                  id: draft.id,
+                  villageName: draft.villageName,
+                  isActive: draft.isActive
+                })
+              }
             />
           </ListSection>
         )}
       </Sheet>
 
+      <ActionSheet
+        open={Boolean(removing)}
+        onClose={() => setRemoving(null)}
+        title={removing?.villageName || ''}
+        message="Deactivating keeps the village on record and can be undone. Deleting cannot."
+        actions={
+          removing
+            ? [
+                removing.isActive
+                  ? { label: 'Deactivate', onSelect: () => setActive(removing, false) }
+                  : { label: 'Reactivate', onSelect: () => setActive(removing, true) },
+                {
+                  label: 'Delete Permanently',
+                  destructive: true,
+                  onSelect: () => setPendingDelete(removing)
+                }
+              ]
+            : []
+        }
+      />
+
       <Alert
         open={Boolean(pendingDelete)}
         onClose={() => setPendingDelete(null)}
-        title="Remove this village?"
-        message={`${pendingDelete?.villageName} will stop appearing in the trip form. Existing trips keep it.`}
-        confirmLabel="Remove"
+        title="Delete this village?"
+        message={`${pendingDelete?.villageName} will be removed from the village list. Trips that already list it keep it, because trips store the name. This cannot be undone.`}
+        confirmLabel="Delete"
         destructive
         onConfirm={confirmDelete}
       />

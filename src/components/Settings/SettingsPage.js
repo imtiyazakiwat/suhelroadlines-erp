@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { vehicleService, villageService } from '../../services/firebaseService';
 import { Card, ListSection, ListRow, Stat, Skeleton, useToast } from '../../ui';
-import { TruckIcon, MapPinIcon } from '../Common/Icons';
+import { TruckIcon, MapPinIcon, DatabaseIcon } from '../Common/Icons';
 import './SettingsPage.css';
 
 /* =============================================================================
@@ -105,9 +105,24 @@ const SettingsPage = () => {
         />
       </ListSection>
 
+      {/* This was a static "Data — Firestore + Realtime cache" row: a fact with
+          nothing behind it. It now leads somewhere, because the one thing there
+          was no way to do was get rid of records in bulk. Kept in its own
+          section, below the fleet it can delete, so a mis-tap cannot land on it
+          while aiming at Vehicles. */}
+      <ListSection header="Storage">
+        <ListRow
+          icon={<DatabaseIcon size={17} />}
+          iconTone="neutral"
+          title="Data"
+          subtitle="Firestore + Realtime cache"
+          chevron
+          onClick={() => navigate('/settings/data')}
+        />
+      </ListSection>
+
       <ListSection header="About">
         <ListRow title="App" value="Suhel Roadlines" />
-        <ListRow title="Data" value="Firestore + Realtime cache" />
       </ListSection>
     </div>
   );

@@ -177,6 +177,16 @@ export const CalendarIcon = ({ size = 24, className = '' }) => (
   </svg>
 );
 
+/* Stacked discs: the conventional shorthand for stored records, and it reads as
+   layers, which is what the three-tier data path actually is. */
+export const DatabaseIcon = ({ size = 24, className = '' }) => (
+  <svg {...base(size)} className={className}>
+    <ellipse cx="12" cy="6" rx="7.5" ry="3" />
+    <path d="M4.5 6v6c0 1.66 3.36 3 7.5 3s7.5-1.34 7.5-3V6" />
+    <path d="M4.5 12v6c0 1.66 3.36 3 7.5 3s7.5-1.34 7.5-3v-6" />
+  </svg>
+);
+
 /* Villages are places, so they get a map pin rather than the gear the Settings
    list used to borrow. A gear next to "Villages" implied configuration. */
 export const MapPinIcon = ({ size = 24, className = '' }) => (

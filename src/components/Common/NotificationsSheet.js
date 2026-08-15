@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { tripService } from '../../services/firebaseService';
 import { formatINR, relativeDayLabel, isStrReceived, toDate } from '../../services/homeService';
+import { formatVehicleNumber } from '../../services/textService';
 import { Sheet, ListSection, ListRow, EmptyState, Button, Skeleton } from '../../ui';
 import { DocAlertIcon, DocCheckIcon } from './Icons';
 import './NotificationsSheet.css';
@@ -80,8 +81,8 @@ const NotificationsSheet = ({ open, onClose }) => {
                 key={trip.id}
                 icon={<DocAlertIcon size={17} />}
                 iconTone="danger"
-                title={trip.driverName || trip.vehicleNumber}
-                subtitle={trip.vehicleNumber}
+                title={trip.driverName || formatVehicleNumber(trip.vehicleNumber)}
+                subtitle={formatVehicleNumber(trip.vehicleNumber)}
                 detail={`${formatINR(trip.advanceAmount || 0)} Due STR`}
                 value={relativeDayLabel(trip.date)}
                 chevron

@@ -99,17 +99,22 @@ const byDateDesc = (a, b) => (asDate(b.date)?.getTime() || 0) - (asDate(a.date)?
 
 // Retry handlers for records stranded in the RTDB outbox (write happened,
 // Firestore promotion did not). Runs once per app start.
+//
+// Every one of these has to honour `entry.op === 'delete'`. Trips did; vehicles
+// and villages did not, so a queued delete was replayed as
+// `setDoc(id, entry.data, { merge: true })` with `entry.data` set to null — which
+// throws, leaves the entry in the outbox forever, and would resurrect the record
+// if it ever succeeded. That is one half of "delete doesn't work".
+const promoteDeleteOr = (collectionName) => (id, entry) =>
+  entry.op === 'delete'
+    ? deleteDoc(doc(db, collectionName, id))
+    : setDoc(doc(db, collectionName, id), entry.data, { merge: true });
+
 const outboxPromoters = {
-  [COLLECTIONS.TRIPS]: (id, entry) =>
-    entry.op === 'delete'
-      ? deleteDoc(doc(db, COLLECTIONS.TRIPS, id))
-      : setDoc(doc(db, COLLECTIONS.TRIPS, id), entry.data, { merge: true }),
-  [COLLECTIONS.VEHICLES]: (id, entry) =>
-    setDoc(doc(db, COLLECTIONS.VEHICLES, id), entry.data, { merge: true }),
-  [COLLECTIONS.ADVANCES]: (id, entry) =>
-    setDoc(doc(db, COLLECTIONS.ADVANCES, id), entry.data, { merge: true }),
-  [COLLECTIONS.VILLAGES]: (id, entry) =>
-    setDoc(doc(db, COLLECTIONS.VILLAGES, id), entry.data, { merge: true })
+  [COLLECTIONS.TRIPS]: promoteDeleteOr(COLLECTIONS.TRIPS),
+  [COLLECTIONS.VEHICLES]: promoteDeleteOr(COLLECTIONS.VEHICLES),
+  [COLLECTIONS.ADVANCES]: promoteDeleteOr(COLLECTIONS.ADVANCES),
+  [COLLECTIONS.VILLAGES]: promoteDeleteOr(COLLECTIONS.VILLAGES)
 };
 
 /**
@@ -441,7 +446,7 @@ export const vehicleService = {
    */
   async getAllVehicles(includeInactive = false) {
     if (!checkFirebaseAvailability()) {
-      return await localVehicleService.getAllVehicles();
+      return await localVehicleService.getAllVehicles(includeInactive);
     }
 
     try {
@@ -454,7 +459,7 @@ export const vehicleService = {
       return includeInactive ? vehicles : vehicles.filter(vehicle => vehicle.isActive !== false);
     } catch (error) {
       console.warn('Firebase getAllVehicles failed, falling back to local storage');
-      return await localVehicleService.getAllVehicles();
+      return await localVehicleService.getAllVehicles(includeInactive);
     }
   },
 
@@ -475,8 +480,33 @@ export const vehicleService = {
     }
   },
 
-  // Update vehicle
+  /**
+   * Update a vehicle.
+   *
+   * This used to call `updateDoc` directly, which is why every edit and every
+   * delete looked like it did nothing:
+   *
+   *  1. reads come from the fastSync cache (memory + sessionStorage + RTDB
+   *     `/cache/vehicles`). A raw Firestore write leaves all three holding the
+   *     old record, so reloading the list showed the value you just changed
+   *     reverting in front of you.
+   *  2. `updateDoc` fails with `not-found` when the document only exists in the
+   *     cache or the outbox — which is the normal state for a vehicle added
+   *     moments earlier, because `addVehicle` resolves on the RTDB write and
+   *     promotes to Firestore in the background.
+   *  3. there was no availability guard, so with Firestore unavailable this
+   *     called `doc(null, …)` and threw a Firebase error the UI turned into
+   *     "Could not save the vehicle".
+   *
+   * `setDoc(..., { merge: true })` rather than `updateDoc` for point 2: merging
+   * creates the document when the promotion has not landed yet, instead of
+   * throwing, and behaves identically when it has.
+   */
   async updateVehicle(vehicleNumber, updateData) {
+    if (!checkFirebaseAvailability()) {
+      return await localVehicleService.updateVehicle(vehicleNumber, updateData);
+    }
+
     try {
       // Import validation constants
       const { VEHICLE_TYPES } = await import('../types');
@@ -489,12 +519,20 @@ export const vehicleService = {
         }
         finalUpdateData.vehicleType = updateData.vehicleType;
       }
-      
-      const vehicleRef = doc(db, COLLECTIONS.VEHICLES, vehicleNumber);
-      await updateDoc(vehicleRef, {
-        ...finalUpdateData,
-        updatedAt: serverTimestamp()
-      });
+
+      await fastSync.writeRecord(
+        COLLECTIONS.VEHICLES,
+        vehicleNumber,
+        { ...finalUpdateData, updatedAt: new Date() },
+        () =>
+          setDoc(
+            doc(db, COLLECTIONS.VEHICLES, vehicleNumber),
+            { ...finalUpdateData, updatedAt: serverTimestamp() },
+            { merge: true }
+          ),
+        { op: 'update' }
+      );
+
       return { vehicleNumber, ...finalUpdateData };
     } catch (error) {
       console.error('Error updating vehicle:', error);
@@ -502,14 +540,40 @@ export const vehicleService = {
     }
   },
 
-  // Delete vehicle (soft delete)
+  /**
+   * Deactivate a vehicle — the reversible option.
+   *
+   * The record stays on file with its history and stays in the cache, so the
+   * management screen can still show it under Inactive and switch it back on.
+   * It just stops being offered anywhere you dispatch from, because
+   * `getAllVehicles()` hides inactive vehicles by default.
+   */
+  async deactivateVehicle(vehicleNumber, isActive = false) {
+    return await this.updateVehicle(vehicleNumber, { isActive: isActive === true });
+  },
+
+  /**
+   * Delete a vehicle for good.
+   *
+   * This was a soft delete wearing a delete label: it set `isActive: false` and
+   * nothing else, so a vehicle the user had asked to remove kept showing up in
+   * Settings and could never actually be got rid of. Deactivation is now its own
+   * action (above) and this one really deletes.
+   *
+   * Trips and advances are untouched. They store the vehicle *number* as a
+   * string rather than a reference, so history survives the vehicle record — and
+   * the alternative, cascading into every trip, would destroy the books to tidy
+   * up a list.
+   */
   async deleteVehicle(vehicleNumber) {
+    if (!checkFirebaseAvailability()) {
+      return await localVehicleService.deleteVehicle(vehicleNumber);
+    }
+
     try {
-      const vehicleRef = doc(db, COLLECTIONS.VEHICLES, vehicleNumber);
-      await updateDoc(vehicleRef, {
-        isActive: false,
-        updatedAt: serverTimestamp()
-      });
+      await fastSync.removeRecord(COLLECTIONS.VEHICLES, vehicleNumber, () =>
+        deleteDoc(doc(db, COLLECTIONS.VEHICLES, vehicleNumber))
+      );
       return vehicleNumber;
     } catch (error) {
       console.error('Error deleting vehicle:', error);
@@ -853,7 +917,22 @@ export const villageService = {
     }
   },
 
-  // Delete village (soft delete, matching vehicles)
+  /** Deactivate a village. Reversible; see vehicleService.deactivateVehicle. */
+  async deactivateVillage(villageId, isActive = false) {
+    return await this.updateVillage(villageId, { isActive: isActive === true });
+  },
+
+  /**
+   * Delete a village for good, matching vehicles.
+   *
+   * This was `removeRecord` (which queues op: 'delete') paired with a Firestore
+   * write that only set `isActive: false` — so the row vanished from the cache,
+   * came back as soon as anything revalidated, and the outbox entry could never
+   * be promoted because the villages promoter had no delete branch. Both halves
+   * are fixed: deactivation is its own action and this is a real delete.
+   *
+   * Trips store village *names*, so their routes are unaffected.
+   */
   async deleteVillage(villageId) {
     if (!checkFirebaseAvailability()) {
       throw new Error('Cannot delete a village while offline storage is in use');
@@ -861,10 +940,7 @@ export const villageService = {
 
     try {
       await fastSync.removeRecord(COLLECTIONS.VILLAGES, villageId, () =>
-        updateDoc(doc(db, COLLECTIONS.VILLAGES, villageId), {
-          isActive: false,
-          updatedAt: serverTimestamp()
-        })
+        deleteDoc(doc(db, COLLECTIONS.VILLAGES, villageId))
       );
 
       return villageId;

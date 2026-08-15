@@ -356,6 +356,47 @@ export const flushOutbox = async (promoters = {}) => {
   return { flushed, failed };
 };
 
+/* --------------------------------- clear ---------------------------------- */
+
+/**
+ * Drop every trace of a collection from tiers 1 and 2: memory, the session
+ * snapshot, the RTDB cache node and the RTDB outbox node.
+ *
+ * Firestore is *not* touched — that is the caller's job (see services/
+ * dataService.js), because this function is also the honest way to recover from
+ * a poisoned cache without destroying the system of record.
+ *
+ * Two details that matter:
+ *  - the outbox node goes too, otherwise `flushOutbox` would faithfully
+ *    re-promote the records that were just deleted from Firestore;
+ *  - the live RTDB subscription ignores empty snapshots (see
+ *    `ensureSubscription`), so removing the cache node alone would leave the
+ *    in-memory copy standing. Memory is cleared here first, and subscribers are
+ *    notified so mounted screens re-render empty rather than showing rows that
+ *    no longer exist.
+ */
+export const clearCollection = async (collection) => {
+  memory.delete(collection);
+  try {
+    sessionStorage.removeItem(SESSION_PREFIX + collection);
+  } catch (e) {
+    /* best effort */
+  }
+  inFlight.delete(collection);
+  notify(collection);
+
+  if (!canUseRtdb()) return;
+  try {
+    await Promise.all([
+      remove(ref(rtdb, `${CACHE_ROOT}/${collection}`)),
+      remove(ref(rtdb, `${OUTBOX_ROOT}/${collection}`))
+    ]);
+  } catch (error) {
+    console.warn(`fastSync: clearing ${collection} failed:`, error.message);
+    throw error;
+  }
+};
+
 /** Merge a partial patch into the cache without any Firestore work. */
 export const patchCache = (collection, id, partial) => {
   patchMemory(collection, id, partial);
@@ -368,6 +409,7 @@ export const fastSync = {
   readCollection,
   writeRecord,
   removeRecord,
+  clearCollection,
   subscribeCollection,
   patchCache,
   flushOutbox,
