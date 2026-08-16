@@ -51,7 +51,7 @@ const RouteTransition = ({ children }) => {
   const location = useLocation();
   const navigationType = useNavigationType();
 
-  const [current, setCurrent] = useState({ key: location.pathname, node: children });
+  const [current, setCurrent] = useState({ key: location.pathname, node: React.isValidElement(children) ? React.cloneElement(children, { location }) : children });
   const [previous, setPrevious] = useState(null);
   const [direction, setDirection] = useState(null);
 
@@ -60,14 +60,14 @@ const RouteTransition = ({ children }) => {
   useEffect(() => {
     // Same route, new children (data loaded, filters changed): swap in place.
     if (location.pathname === current.key) {
-      setCurrent({ key: location.pathname, node: children });
+      setCurrent({ key: location.pathname, node: React.isValidElement(children) ? React.cloneElement(children, { location }) : children });
       return;
     }
 
     const nextDirection = directionFor(current.key, location.pathname, navigationType);
 
     setPrevious(current);
-    setCurrent({ key: location.pathname, node: children });
+    setCurrent({ key: location.pathname, node: React.isValidElement(children) ? React.cloneElement(children, { location }) : children });
     setDirection(nextDirection);
 
     // Drop the outgoing layer once it has finished travelling.
