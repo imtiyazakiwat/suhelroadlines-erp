@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { tripService } from '../../services/firebaseService';
-import { isStrReceived, formatINR } from '../../services/homeService';
+import { isStrReceived, formatINR, toDate } from '../../services/homeService';
 import { formatVehicleNumber } from '../../services/textService';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import {
@@ -90,6 +90,52 @@ const SimpleSTRStatus = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // The STR tab badge counts every outstanding STR across all dates, but this
+  // screen opens scoped to the current month. Clicking through from the badge
+  // when a pending STR fell in another month used to land on an empty list —
+  // the July trip vanished in an August view even though the badge still said
+  // "1 due". On first load, widen the range to span every outstanding STR so
+  // the badge and the list agree. Once only: the date sheet owns range changes
+  // after that.
+  const widenedForDues = useRef(false);
+  useEffect(() => {
+    if (widenedForDues.current) return;
+    let cancelled = false;
+
+    tripService
+      .getAllTrips()
+      .then((all) => {
+        if (cancelled) return;
+        const dueDates = all
+          .filter((trip) => !isStrReceived(trip))
+          .map((trip) => toDate(trip.date))
+          .filter(Boolean);
+        if (!dueDates.length) return;
+
+        const earliest = Math.min(...dueDates.map((date) => date.getTime()));
+        const latest = Math.max(...dueDates.map((date) => date.getTime()));
+
+        const from = new Date(filters.dateFrom).getTime();
+        const to = new Date(filters.dateTo);
+        to.setHours(23, 59, 59, 999);
+
+        if (earliest < from || latest > to.getTime()) {
+          widenedForDues.current = true;
+          setFilters({
+            dateFrom: format(new Date(earliest), 'yyyy-MM-dd'),
+            dateTo: format(new Date(latest), 'yyyy-MM-dd')
+          });
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+    // Intentionally once on mount, against the initial month range.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const counts = useMemo(
     () => ({

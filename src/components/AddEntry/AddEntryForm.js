@@ -284,11 +284,18 @@ const AddEntryForm = () => {
     try {
       const number = formatVehicleNumber(formData.vehicleNumber);
 
+      const strStatusValue = formData.strNumber.trim();
       const tripData = createTripEntry({
         slNumber: parseInt(formData.slNumber, 10),
         date: new Date(formData.date),
         vehicleNumber: number,
-        strNumber: formData.strNumber.trim(),
+        /* Written to both fields on purpose. `strNumber` is the mislabelled
+           field the form has always filled, but `isStrReceived()` reads
+           `strStatus` first — so writing the choice only to `strNumber` made
+           every trip read as "Due" no matter what was picked. Writing both
+           keeps old readers working and makes the screen agree with the form. */
+        strNumber: strStatusValue,
+        strStatus: strStatusValue,
         vehicleType: formData.vehicleType,
         villages: formData.villages,
         quantity: parseFloat(formData.quantity),
