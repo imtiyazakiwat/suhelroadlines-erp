@@ -56,6 +56,7 @@ import {
   Sheet,
   Alert,
   BarChart,
+  ImagePicker,
   useToast
 } from '../../ui';
 import {
@@ -531,7 +532,8 @@ const ReportsPage = () => {
       quantity: trip.quantity ?? '',
       driverName: trip.driverName || '',
       mobileNumber: trip.mobileNumber || '',
-      advanceAmount: trip.advanceAmount ?? ''
+      advanceAmount: trip.advanceAmount ?? '',
+      imageUrl: trip.imageUrl || ''
     });
     setErrors({});
   };
@@ -583,7 +585,8 @@ const ReportsPage = () => {
         quantity: parseFloat(draft.quantity),
         driverName: titleCase(draft.driverName),
         mobileNumber: String(draft.mobileNumber).trim(),
-        advanceAmount: nextAdvance
+        advanceAmount: nextAdvance,
+        imageUrl: draft.imageUrl || ''
       });
 
       if (difference > 0) {
@@ -1249,9 +1252,17 @@ const ReportsPage = () => {
               </ListRow>
             </ListSection>
 
+            <ListSection inset={false} header="Photo" footer="Optional — a delivery challan, lorry photo, or anything relevant.">
+              <ListRow>
+                <ImagePicker
+                  value={draft.imageUrl}
+                  onChange={(url) => setDraft((prev) => ({ ...prev, imageUrl: url }))}
+                  disabled={saving}
+                />
+              </ListRow>
+            </ListSection>
+
             <ListSection
-              inset={false}
-              header="Advance"
               footer={
                 errors.advanceAmount ||
                 'Raising this records a top-up for the difference. Lowering it does not remove one.'
