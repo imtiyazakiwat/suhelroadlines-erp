@@ -110,7 +110,6 @@ const ImagePicker = ({ value = [], onChange, label, hint, error, disabled, maxIm
         ref={inputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         className="imgpkr__input"
         onChange={handleFile}
         disabled={disabled || uploading}

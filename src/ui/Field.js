@@ -118,14 +118,16 @@ export const CurrencyField = React.forwardRef(({ onChange, ...rest }, ref) => (
 ));
 CurrencyField.displayName = 'CurrencyField';
 
-/** Indian mobile: 10 digits, numeric keypad, hard cap. */
+/** Indian mobile: 10 digits, numeric keypad.
+ *  No maxLength on the input — paste can bring formatted text like
+ *  "98765 43210" which exceeds 10 chars before the regex strips spaces.
+ *  The onChange handler enforces the 10-digit limit after stripping. */
 export const PhoneField = React.forwardRef(({ onChange, ...rest }, ref) => (
   <TextField
     ref={ref}
     type="tel"
     inputMode="numeric"
     autoComplete="tel"
-    maxLength={10}
     onChange={(e) =>
       onChange?.({ ...e, target: { ...e.target, value: e.target.value.replace(/\D/g, '').slice(0, 10) } })
     }

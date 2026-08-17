@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CSVLink } from 'react-csv';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 import {
   format,
   startOfDay,
@@ -57,6 +59,7 @@ import {
   Alert,
   BarChart,
   ImagePicker,
+  TextArea,
   useToast
 } from '../../ui';
 import {
@@ -533,7 +536,8 @@ const ReportsPage = () => {
       driverName: trip.driverName || '',
       mobileNumber: trip.mobileNumber || '',
       advanceAmount: trip.advanceAmount ?? '',
-      images: Array.isArray(trip.images) ? trip.images : (trip.imageUrl ? [trip.imageUrl] : [])
+      images: Array.isArray(trip.images) ? trip.images : (trip.imageUrl ? [trip.imageUrl] : []),
+      note: trip.note || ''
     });
     setErrors({});
   };
@@ -586,7 +590,8 @@ const ReportsPage = () => {
         driverName: titleCase(draft.driverName),
         mobileNumber: String(draft.mobileNumber).trim(),
         advanceAmount: nextAdvance,
-        images: draft.images || []
+        images: draft.images || [],
+        note: draft.note.trim()
       });
 
       if (difference > 0) {
@@ -663,31 +668,80 @@ const ReportsPage = () => {
   // genuinely complete. Derived, so it can never go stale like the old
   // effect-populated copy did when the trip list emptied.
   const csv = useMemo(() => {
-    const rows = visibleTrips.map((trip) => ({
-      'SL Number': trip.slNumber ?? '',
-      Date: dateText(trip.date),
-      'Vehicle Number': formatVehicleNumber(trip.vehicleNumber),
-      'Vehicle Type': trip.vehicleType || 'lorry',
-      'STR Number': trip.strNumber || '',
-      'STR Status': isStrReceived(trip) ? 'Received' : 'not received',
-      Villages: (trip.villages || []).join('; '),
-      Quantity: trip.quantity || 0,
-      'Driver Name': trip.driverName || '',
-      'Mobile Number': trip.mobileNumber || '',
-      'Initial Advances Total': trip.initialTotal || 0,
-      'Initial Advances Count': trip.initialAdvances.length,
-      'Additional Advances Total': trip.additionalTotal || 0,
-      'Additional Advances Count': trip.additionalAdvances.length,
-      'Grand Total Advances': trip.totalAdvances || 0,
-      'Total Advance Records': trip.advanceCount || 0
-    }));
+    const rows = visibleTrips.map((trip) => {
+      const vehicle = vehicles.find((v) => sameText(v.vehicleNumber, trip.vehicleNumber));
+      return {
+        'SL Number': trip.slNumber ?? '',
+        Date: dateText(trip.date),
+        'Vehicle Number': formatVehicleNumber(trip.vehicleNumber),
+        'Own Vehicle': vehicle?.isOwn === true ? 'Yes' : 'No',
+        'Vehicle Type': trip.vehicleType || 'lorry',
+        'STR Number': trip.strNumber || '',
+        'STR Status': isStrReceived(trip) ? 'Received' : 'not received',
+        Villages: (trip.villages || []).join('; '),
+        Quantity: trip.quantity || 0,
+        'Driver Name': trip.driverName || '',
+        'Mobile Number': trip.mobileNumber || '',
+        'Initial Advances Total': trip.initialTotal || 0,
+        'Initial Advances Count': trip.initialAdvances.length,
+        'Additional Advances Total': trip.additionalTotal || 0,
+        'Additional Advances Count': trip.additionalAdvances.length,
+        'Grand Total Advances': trip.totalAdvances || 0,
+        'Total Advance Records': trip.advanceCount || 0,
+        Note: trip.note || ''
+      };
+    });
 
     return {
       rows,
       headers: Object.keys(rows[0] || {}).map((key) => ({ label: key, key })),
       filename: `SuhelRoadlines_${iso(win.from)}_to_${iso(win.to)}.csv`
     };
-  }, [visibleTrips, win]);
+  }, [visibleTrips, vehicles, win]);
+
+  /* ------------------------------------------------------------------ pdf */
+  const exportPdf = useCallback(() => {
+    if (!csv.rows.length) {
+      toast.error('Nothing to export in this period');
+      return;
+    }
+
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+    /* Title */
+    doc.setFontSize(14);
+    doc.text('Suhel Roadlines — Trip Report', 14, 15);
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    doc.text(`${dateText(win.from)} — ${dateText(win.to)}  ·  ${csv.rows.length} trips`, 14, 21);
+
+    /* Table */
+    const head = [csv.headers.map((h) => h.label)];
+    const body = csv.rows.map((row) => csv.headers.map((h) => String(row[h.key] ?? '')));
+
+    doc.autoTable({
+      startY: 26,
+      head,
+      body,
+      styles: { fontSize: 7, cellPadding: 2 },
+      headStyles: { fillColor: [30, 41, 59] },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      /* Highlight own-vehicle rows with a brand tint. */
+      didParseCell: (data) => {
+        if (data.section === 'body') {
+          const trip = visibleTrips[data.row.index];
+          const vehicle = vehicles.find((v) => sameText(v.vehicleNumber, trip?.vehicleNumber));
+          if (vehicle?.isOwn === true) {
+            data.cell.styles.fillColor = [219, 234, 254]; /* brand-50 */
+          }
+        }
+      },
+      margin: { left: 14, right: 14 }
+    });
+
+    doc.save(`SuhelRoadlines_${iso(win.from)}_to_${iso(win.to)}.pdf`);
+    toast.success(`Exported ${csv.rows.length} trips as PDF`);
+  }, [csv, visibleTrips, vehicles, win, toast]);
 
   const villageOptions = useMemo(() => {
     const byName = new Map();
@@ -1004,6 +1058,20 @@ const ReportsPage = () => {
             </CSVLink>
           }
         />
+        <ListRow
+          as="div"
+          icon={<TrendUpIcon size={17} />}
+          iconTone="brand"
+          title={
+            <button
+              type="button"
+              className="rep__export-link"
+              onClick={exportPdf}
+            >
+              Export {csv.rows.length} {csv.rows.length === 1 ? 'trip' : 'trips'} as PDF
+            </button>
+          }
+        />
       </ListSection>
 
       {/* ------------------------------- overlays ------------------------------- */}
@@ -1107,6 +1175,12 @@ const ReportsPage = () => {
               <ListRow title="Mobile" value={detailTrip.mobileNumber || '—'} />
             </ListSection>
 
+            {detailTrip.note && (
+              <ListSection inset={false} header="Note">
+                <ListRow title={detailTrip.note} />
+              </ListSection>
+            )}
+
             <ListSection
               inset={false}
               header="Advances"
@@ -1186,6 +1260,7 @@ const ReportsPage = () => {
                 <TextField
                   label="Vehicle"
                   layout="row"
+                  className="fld__input--uppercase"
                   value={draft.vehicleNumber}
                   error={errors.vehicleNumber}
                   onChange={(event) =>
@@ -1263,6 +1338,18 @@ const ReportsPage = () => {
                   onChange={(event) =>
                     setDraft((prev) => ({ ...prev, mobileNumber: event.target.value }))
                   }
+                />
+              </ListRow>
+            </ListSection>
+
+            <ListSection inset={false} header="Note" footer="Optional — any remark about this trip.">
+              <ListRow>
+                <TextArea
+                  label="Note"
+                  value={draft.note}
+                  placeholder="Optional"
+                  onChange={(event) => setDraft((prev) => ({ ...prev, note: event.target.value }))}
+                  rows={3}
                 />
               </ListRow>
             </ListSection>

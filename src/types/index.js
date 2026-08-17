@@ -13,7 +13,8 @@ export const createTripEntry = ({
   advanceAmount = 0,
   vehicleType = 'lorry',
   strStatus = 'not received',
-  images = []
+  images = [],
+  note = ''
 }) => ({
   id: null, // Will be set by Firestore
   slNumber: slNumber || 0,
@@ -28,6 +29,7 @@ export const createTripEntry = ({
   vehicleType: vehicleType,
   strStatus: strStatus,
   images: Array.isArray(images) ? images : [],
+  note: note || '',
   createdAt: new Date(),
   updatedAt: new Date()
 });

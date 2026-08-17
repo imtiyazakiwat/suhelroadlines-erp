@@ -350,6 +350,7 @@ const VehiclesPage = () => {
                    written before normalisation existed can still be mixed case,
                    and a number plate is uppercase on every permit and STR. */
                 title={formatVehicleNumber(vehicle.vehicleNumber)}
+                className={isOwnVehicle(vehicle) ? 'lst26__row--own' : ''}
                 subtitle={
                   [vehicle.driverName, vehicle.mobileNumber].filter(Boolean).join(' · ') ||
                   'No driver on file'
@@ -406,6 +407,7 @@ const VehiclesPage = () => {
                 <TextField
                   label="Number"
                   layout="row"
+                  className="fld__input--uppercase"
                   value={draft.vehicleNumber}
                   // Uppercased as you type. Vehicle numbers are uppercase on
                   // every permit and STR, so correcting at save time would show

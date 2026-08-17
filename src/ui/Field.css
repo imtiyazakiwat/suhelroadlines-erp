@@ -128,6 +128,13 @@
   text-align: center;
 }
 
+/* Vehicle numbers are always uppercase — the keyboard shows lowercase but
+   the normalised value and the display are both uppercase.  Visually
+   transforming on input keeps them in sync while typing. */
+.fld__input--uppercase {
+  text-transform: uppercase;
+}
+
 .fld__textarea {
   min-height: 76px;
   padding: 4px 0;

@@ -16,6 +16,7 @@ import {
   CurrencyField,
   NumberField,
   DateField,
+  TextArea,
   useToast
 } from '../../ui';
 import useCommitAction from '../Layout/useCommitAction';
@@ -61,7 +62,8 @@ const AddEntryForm = () => {
     driverName: '',
     mobileNumber: '',
     advanceAmount: '',
-    images: []
+    images: [],
+    note: ''
   });
 
   const [vehicles, setVehicles] = useState([]);
@@ -304,7 +306,8 @@ const AddEntryForm = () => {
         driverName: titleCase(formData.driverName),
         mobileNumber: formData.mobileNumber.trim(),
         advanceAmount: parseFloat(formData.advanceAmount) || 0,
-        images: formData.images
+        images: formData.images,
+        note: formData.note.trim()
       });
 
       // The trip, and — when an amount was entered — its opening advance, which
@@ -552,6 +555,18 @@ const AddEntryForm = () => {
             value={formData.images}
             onChange={(images) => setField('images', images)}
             disabled={saving}
+          />
+        </ListRow>
+      </ListSection>
+
+      <ListSection header="Note" footer="Optional — any remark about this trip.">
+        <ListRow>
+          <TextArea
+            label="Note"
+            value={formData.note}
+            onChange={(e) => setField('note', e.target.value)}
+            placeholder="Loading at yard, delay at weighbridge…"
+            rows={3}
           />
         </ListRow>
       </ListSection>

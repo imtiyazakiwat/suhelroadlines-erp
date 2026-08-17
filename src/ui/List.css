@@ -221,3 +221,10 @@
   flex: 1;
   min-width: 0;
 }
+
+/* Own-vehicle accent: a thin brand-coloured bar on the left edge so the
+   "My vehicles" group reads as the firm's own fleet at a glance. */
+.lst26__row--own {
+  border-left: 3px solid var(--brand);
+  padding-left: calc(var(--gap-4) - 3px);
+}
