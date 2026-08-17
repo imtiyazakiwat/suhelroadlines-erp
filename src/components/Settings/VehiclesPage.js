@@ -340,6 +340,7 @@ const VehiclesPage = () => {
             {group.items.map((vehicle) => (
               <ListRow
                 key={vehicle.vehicleNumber}
+                thumbnail={vehicle.imageUrl || undefined}
                 icon={<TruckIcon size={17} />}
                 iconTone={vehicle.isActive === false ? 'neutral' : 'brand'}
                 /* Uppercased on the way out as well as on the way in: records

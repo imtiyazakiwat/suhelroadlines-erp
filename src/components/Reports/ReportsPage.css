@@ -220,6 +220,19 @@
   color: var(--label-1);
 }
 
+/* Trip photo: full-width inside the detail sheet, like a photo in a
+   Wallet pass. Rounded to match the card rhythm. */
+.rep__detail-photo {
+  margin-bottom: var(--gap-4);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--fill-4);
+}
+.rep__detail-photo img {
+  width: 100%;
+  display: block;
+}
+
 @media (min-width: 620px) {
   .rep {
     max-width: 560px;

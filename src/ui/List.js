@@ -27,6 +27,7 @@ export const ListRow = React.forwardRef(
       as,
       icon = null,
       iconTone = 'neutral',
+      thumbnail = null,
       title,
       subtitle,
       detail,
@@ -62,7 +63,13 @@ export const ListRow = React.forwardRef(
         {...tagProps}
         {...rest}
       >
-        {icon && <span className={`lst26__icon lst26__icon--${iconTone}`}>{icon}</span>}
+        {thumbnail ? (
+          <span className="lst26__thumb">
+            <img src={thumbnail} alt="" loading="lazy" />
+          </span>
+        ) : icon ? (
+          <span className={`lst26__icon lst26__icon--${iconTone}`}>{icon}</span>
+        ) : null}
 
         <span className="lst26__text">
           {title && <span className="lst26__title">{title}</span>}

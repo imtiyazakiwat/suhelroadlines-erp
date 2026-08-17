@@ -927,6 +927,7 @@ const ReportsPage = () => {
                 return (
                   <ListRow
                     key={trip.id}
+                    thumbnail={trip.imageUrl || undefined}
                     icon={received ? <DocCheckIcon size={17} /> : <DocAlertIcon size={17} />}
                     iconTone={received ? 'success' : 'danger'}
                     title={formatVehicleNumber(trip.vehicleNumber)}
@@ -955,6 +956,7 @@ const ReportsPage = () => {
             {visibleAdvances.map((item) => (
               <ListRow
                 key={item.id}
+                thumbnail={item.imageUrl || undefined}
                 icon={<WalletIcon size={17} />}
                 iconTone={item.advanceType === 'initial' ? 'accent' : 'brand'}
                 title={formatVehicleNumber(item.vehicleNumber) || '—'}
@@ -1067,6 +1069,12 @@ const ReportsPage = () => {
                 {isStrReceived(detailTrip) ? 'STR received' : 'STR due'}
               </Badge>
             </Card>
+
+            {detailTrip.imageUrl && (
+              <div className="rep__detail-photo">
+                <img src={detailTrip.imageUrl} alt="" loading="lazy" />
+              </div>
+            )}
 
             <ListSection inset={false} header="Trip">
               <ListRow title="Date" value={dateText(detailTrip.date)} />
