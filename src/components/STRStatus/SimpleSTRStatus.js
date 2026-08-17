@@ -12,6 +12,7 @@ import {
   ListSection,
   ListRow,
   Badge,
+  Chip,
   Card,
   Stat,
   EmptyState,
@@ -46,6 +47,7 @@ const SimpleSTRStatus = () => {
   const [dirtyIds, setDirtyIds] = useState(() => new Set());
   const [filterSheet, setFilterSheet] = useState(false);
   const [vehicleQuery, setVehicleQuery] = useState('');
+  const [onlyOwn, setOnlyOwn] = useState(false);
 
   const [filters, setFilters] = useState({
     dateFrom: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
@@ -147,19 +149,23 @@ const SimpleSTRStatus = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const filteredByOwnership = useMemo(() => {
+    return onlyOwn ? trips.filter(isOwnTrip) : trips;
+  }, [trips, onlyOwn, isOwnTrip]);
+
   const counts = useMemo(
     () => ({
-      all: trips.length,
-      due: trips.filter((trip) => !isStrReceived(trip)).length,
-      paid: trips.filter(isStrReceived).length
+      all: filteredByOwnership.length,
+      due: filteredByOwnership.filter((trip) => !isStrReceived(trip)).length,
+      paid: filteredByOwnership.filter(isStrReceived).length
     }),
-    [trips]
+    [filteredByOwnership]
   );
 
   const visibleTrips = useMemo(() => {
     const term = vehicleQuery.trim().toLowerCase();
 
-    return trips.filter((trip) => {
+    return filteredByOwnership.filter((trip) => {
       if (statusFilter === 'due' && isStrReceived(trip)) return false;
       if (statusFilter === 'paid' && !isStrReceived(trip)) return false;
       if (term) {
@@ -168,14 +174,14 @@ const SimpleSTRStatus = () => {
       }
       return true;
     });
-  }, [trips, statusFilter, vehicleQuery]);
+  }, [filteredByOwnership, statusFilter, vehicleQuery]);
 
   const dueTotal = useMemo(
     () =>
-      trips
+      filteredByOwnership
         .filter((trip) => !isStrReceived(trip))
         .reduce((sum, trip) => sum + (Number(trip.advanceAmount) || 0), 0),
-    [trips]
+    [filteredByOwnership]
   );
 
   const toggleStatus = (trip) => {
@@ -243,6 +249,7 @@ const SimpleSTRStatus = () => {
       dateTo: format(endOfMonth(new Date()), 'yyyy-MM-dd')
     });
     setVehicleQuery('');
+    setOnlyOwn(false);
   };
 
   const rangeLabel = `${formatDate(filters.dateFrom)} – ${formatDate(filters.dateTo)}`;
@@ -263,18 +270,27 @@ const SimpleSTRStatus = () => {
           ariaLabel="STR status"
         />
 
-        <button
-          type="button"
-          className="str__range"
-          onClick={() => setFilterSheet(true)}
-          aria-haspopup="dialog"
-          aria-expanded={filterSheet}
-          aria-label={`Date range, ${rangeLabel}. Change`}
-        >
-          <CalendarIcon size={15} />
-          <span>{rangeLabel}</span>
-          <ChevronDownIcon size={13} className="str__range-chevron" />
-        </button>
+        <div className="str__filters-row">
+          <button
+            type="button"
+            className="str__range"
+            onClick={() => setFilterSheet(true)}
+            aria-haspopup="dialog"
+            aria-expanded={filterSheet}
+            aria-label={`Date range, ${rangeLabel}. Change`}
+          >
+            <CalendarIcon size={15} />
+            <span>{rangeLabel}</span>
+            <ChevronDownIcon size={13} className="str__range-chevron" />
+          </button>
+
+          <Chip
+            selected={onlyOwn}
+            onClick={() => setOnlyOwn((prev) => !prev)}
+          >
+            My Vehicles
+          </Chip>
+        </div>
       </div>
 
       {!isFirebaseAvailable && (

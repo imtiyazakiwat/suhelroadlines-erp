@@ -147,6 +147,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* Visual size stays 38px (matches Apple's nav bar), but the hit area is
+     grown to 44px with an invisible extension — same technique as the STR
+     date chip. Web touch precision is worse than native, so this closes the
+     gap without changing the visual layout. */
   width: 38px;
   height: 38px;
   flex-shrink: 0;
@@ -158,6 +162,13 @@
   cursor: pointer;
   transition: background-color var(--dur-fast) var(--ease-out),
     transform var(--dur-fast) var(--ease-spring);
+}
+
+/* Invisible hit-area extension to meet the 44pt minimum. */
+.nav26__btn::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
 }
 
 .nav26__btn:active {
@@ -382,10 +393,22 @@
 
 /* ------------------------------------------------- nav bar search capsule */
 
+/* The search capsule is intentionally compact. On iPhone the nav bar has
+   ~200px of trailing space after the centered title; a 190px capsule would
+   consume all of it and overlap the title on medium-width devices. The
+   capsule collapses to an icon-only circle well before the label would
+   crowd the title — matching Apple's pattern where search in a toolbar is
+   always a small, secondary control, never a full-width field.
+
+   On the home screen (is-home), the label is visible and the capsule is
+   wider — the home NavBar has no centered title to compete with. A CSS
+   transition animates the width and label opacity when navigating between
+   home and other screens. */
+
 .nav26__search {
   display: inline-flex;
   flex-shrink: 0;
-  max-width: 190px;
+  max-width: 140px;
   color: var(--label-2);
   background: none;
   border: none;
@@ -398,7 +421,12 @@
   align-items: center;
   gap: 6px;
   min-height: 36px;
-  padding: 0 var(--gap-3);
+  padding: 0 var(--gap-2);
+  /* Smooth transition between full capsule (home) and icon-only (other pages).
+     Width and padding animate together so the glass surface shrinks smoothly
+     rather than snapping. */
+  transition: width var(--dur-base) var(--ease-spring),
+    padding var(--dur-base) var(--ease-spring);
 }
 
 .nav26__search-label {
@@ -407,15 +435,39 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Fade the label in/out rather than toggling display, so the width
+     transition has something to animate. */
+  transition: opacity var(--dur-fast) var(--ease-out),
+    width var(--dur-base) var(--ease-spring);
+  width: auto;
 }
 
-/* Collapse to an icon-only circle when the label would crowd the title */
-@media (max-width: 430px) {
-  .nav26__search-label {
-    display: none;
+/* Home screen: full capsule with visible label. The centered title on other
+   pages is absent here, so the label doesn't compete for space. */
+.nav26__search.is-home {
+  max-width: 190px;
+}
+
+.nav26__search.is-home > .glass__content {
+  padding: 0 var(--gap-3);
+}
+
+.nav26__search.is-home .nav26__search-label {
+  opacity: 1;
+  width: auto;
+}
+
+/* Non-home pages: collapse to icon-only circle on any screen where the label
+   would crowd the centered title. 600px covers all phones in portrait plus
+   small tablets — the label is a secondary hint, not essential. */
+@media (max-width: 600px) {
+  .nav26__search:not(.is-home) .nav26__search-label {
+    opacity: 0;
+    width: 0;
+    overflow: hidden;
   }
 
-  .nav26__search > .glass__content {
+  .nav26__search:not(.is-home) > .glass__content {
     width: 36px;
     padding: 0;
     justify-content: center;

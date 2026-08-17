@@ -33,6 +33,8 @@
   align-items: center;
   justify-content: center;
   gap: 5px;
+  /* Visual height stays at the standard segmented-control size, but the
+     hit area is grown to 44px vertically with an invisible extension. */
   min-height: 30px;
   padding: 0 var(--gap-3);
   font: var(--t-footnote);
@@ -44,6 +46,16 @@
   cursor: pointer;
   white-space: nowrap;
   transition: color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-spring);
+}
+
+/* Invisible hit-area extension. 7px above + 7px below reaches 44px. */
+.seg26__item::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -7px;
+  bottom: -7px;
 }
 
 .seg26__item.is-selected {

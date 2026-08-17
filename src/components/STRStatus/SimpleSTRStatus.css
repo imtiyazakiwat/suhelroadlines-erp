@@ -15,6 +15,13 @@
   padding: 0 var(--gutter) var(--gap-4);
 }
 
+.str__filters-row {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-2);
+  flex-wrap: wrap;
+}
+
 .str__range {
   position: relative;
   display: inline-flex;

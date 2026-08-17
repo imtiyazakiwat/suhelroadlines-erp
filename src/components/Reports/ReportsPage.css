@@ -26,6 +26,13 @@
   padding: 0 var(--gutter);
 }
 
+.rep__filters-row {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-2);
+  flex-wrap: wrap;
+}
+
 /* Same period chip as STR Status, so the two data screens read as siblings. */
 .rep__range {
   position: relative;

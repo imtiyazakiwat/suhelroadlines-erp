@@ -99,12 +99,12 @@ const SearchOverlay = ({ open, onClose }) => {
   };
 
   return (
-    <Sheet open={open} onClose={onClose} title="Search" detent="large" className="srch-sheet">
+    <Sheet open={open} onClose={onClose} detent="medium" className="srch-sheet">
       <div className="srch-sheet__controls">
         <SearchField
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Vehicle, driver, mobile, village"
+          placeholder="Search trips, vehicles, villages"
           data-autofocus
         />
         <Segmented options={FILTERS} value={filter} onChange={setFilter} ariaLabel="Search scope" />

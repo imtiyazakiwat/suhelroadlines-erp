@@ -53,16 +53,22 @@
   min-height: 0;
   /* clear the floating capsule: its height + inset + safe area + breathing room */
   padding-bottom: calc(var(--tabbar-h) + var(--tabbar-inset) + var(--safe-b) + 28px);
-  /* Route transitions live in RouteTransition; a blanket fade here would
-     double up with them. Clipping keeps the outgoing layer off-screen. */
+  /* No overflow:auto here — the document must scroll for position:sticky on
+     the NavBar to work. overflow-x:clip prevents horizontal overflow during
+     route transitions without creating a scroll container. */
   overflow-x: clip;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Brand mark in the nav bar.
 
    The plate and its gradient now come from AppMark's own SVG (one definition
    shared with the Home Screen icon), so this rule only positions it and keeps
-   the double ring that lifts it off the warm wash. */
+   the double ring that lifts it off the warm wash.
+
+   On the home screen, the logo is only rendered at the top — once the user
+   scrolls, AppLayout passes leading={null} so the logo disappears and the
+   NavBar switches to compact mode (like other pages). No CSS hiding needed. */
 .brand-avatar {
   display: block;
   flex-shrink: 0;

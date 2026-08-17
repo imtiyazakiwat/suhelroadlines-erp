@@ -19,6 +19,7 @@ import {
   differenceInCalendarDays
 } from 'date-fns';
 import { tripService, vehicleService, advanceService, villageService } from '../../services/firebaseService';
+import { fastSync } from '../../services/fastSync';
 import {
   toDate,
   isStrReceived,
@@ -52,6 +53,7 @@ import {
   ListSection,
   ListRow,
   Badge,
+  Chip,
   Stat,
   EmptyState,
   Skeleton,
@@ -219,11 +221,13 @@ const measureOf = (trip, measure) => {
 const ReportsPage = () => {
   const toast = useToast();
 
-  const [trips, setTrips] = useState([]);
-  const [advances, setAdvances] = useState([]);
-  const [vehicles, setVehicles] = useState([]);
-  const [villages, setVillages] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [trips, setTrips] = useState(() => fastSync.getMemory('trips') || []);
+  const [advances, setAdvances] = useState(() => fastSync.getMemory('advances') || []);
+  const [vehicles, setVehicles] = useState(() => fastSync.getMemory('vehicles') || []);
+  const [villages, setVillages] = useState(() => fastSync.getMemory('villages') || []);
+  // Skip the skeleton if any collection is already cached — the background
+  // revalidation will update the data without a flash.
+  const [loading, setLoading] = useState(() => !fastSync.getMemory('trips')?.length);
 
   /* Helper: check if a trip/advance belongs to an own vehicle. */
   const isOwnTrip = useCallback(
@@ -236,6 +240,7 @@ const ReportsPage = () => {
 
   const [measure, setMeasure] = useState('advance');
   const [query, setQuery] = useState('');
+  const [onlyOwn, setOnlyOwn] = useState(false);
   const [selectedBar, setSelectedBar] = useState(null);
 
   const [rangeSheet, setRangeSheet] = useState(false);
@@ -262,6 +267,9 @@ const ReportsPage = () => {
 
   const tabParam = searchParams.get('tab');
   const tab = TABS.some((item) => item.value === tabParam) ? tabParam : 'trips';
+
+  // Deep link: ?tripId=xxx opens that trip's detail sheet directly.
+  const tripIdParam = searchParams.get('tripId');
 
   const setParam = useCallback(
     (key, value, fallback) => {
@@ -308,6 +316,26 @@ const ReportsPage = () => {
     load();
   }, [load]);
 
+  // Deep link: after data loads, find the trip by ?tripId and open its detail
+  // sheet. The param is cleaned from the URL so a back navigation doesn't
+  // re-trigger it. This runs once — the joined data is built in a memo below,
+  // but at this point trips/advances are already set by load(), so we can
+  // compute the join here for the lookup without waiting for the memo.
+  useEffect(() => {
+    if (loading || !tripIdParam) return;
+    const allJoined = joinTripAdvances(trips, advances);
+    const target = allJoined.trips.find((t) => t.id === tripIdParam);
+    if (target) {
+      setDetailTrip(target);
+    }
+    // Clean the param so back-nav doesn't re-open the sheet.
+    const next = new URLSearchParams(searchParams);
+    next.delete('tripId');
+    setSearchParams(next, { replace: true });
+    // Only react to the initial load with a tripId param.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, tripIdParam]);
+
   /* ------------------------------------------------------------------ join */
 
   // One pass to index advances by trip, then one pass over trips. Lives in
@@ -321,18 +349,30 @@ const ReportsPage = () => {
   const win = useMemo(() => resolveWindow(range, custom), [range, custom]);
 
   const periodTrips = useMemo(
-    () => joined.trips.filter((trip) => inWindow(trip.date, win.from, win.to)),
-    [joined.trips, win]
+    () =>
+      joined.trips.filter((trip) => {
+        if (onlyOwn && !isOwnTrip(trip)) return false;
+        return inWindow(trip.date, win.from, win.to);
+      }),
+    [joined.trips, win, onlyOwn, isOwnTrip]
   );
 
   const previousTrips = useMemo(
-    () => joined.trips.filter((trip) => inWindow(trip.date, win.prevFrom, win.prevTo)),
-    [joined.trips, win]
+    () =>
+      joined.trips.filter((trip) => {
+        if (onlyOwn && !isOwnTrip(trip)) return false;
+        return inWindow(trip.date, win.prevFrom, win.prevTo);
+      }),
+    [joined.trips, win, onlyOwn, isOwnTrip]
   );
 
   const periodAdvances = useMemo(
-    () => joined.advances.filter((item) => inWindow(advanceWhen(item), win.from, win.to)),
-    [joined.advances, win]
+    () =>
+      joined.advances.filter((item) => {
+        if (onlyOwn && !isOwnTrip(item)) return false;
+        return inWindow(advanceWhen(item), win.from, win.to);
+      }),
+    [joined.advances, win, onlyOwn, isOwnTrip]
   );
 
   /* ---------------------------------------------------------------- search */
@@ -422,6 +462,7 @@ const ReportsPage = () => {
 
     const source = joined.trips.filter(
       (trip) =>
+        (!onlyOwn || isOwnTrip(trip)) &&
         inWindow(trip.date, from, win.to) &&
         matches(
           `${trip.vehicleNumber || ''} ${trip.driverName || ''} ${(trip.villages || []).join(' ')} ${
@@ -465,7 +506,7 @@ const ReportsPage = () => {
         };
       })
     };
-  }, [joined.trips, matches, win, range, measure]);
+  }, [joined.trips, matches, win, range, measure, onlyOwn, isOwnTrip]);
 
   const selectedPoint = buckets.points.find((point) => point.key === selectedBar) || null;
 
@@ -476,7 +517,7 @@ const ReportsPage = () => {
 
   // Selecting a bar in one measure and switching measure would leave a readout
   // describing the wrong thing.
-  useEffect(() => setSelectedBar(null), [measure, range, query]);
+  useEffect(() => setSelectedBar(null), [measure, range, query, onlyOwn]);
 
   /* ------------------------------------------------------- vehicle split */
 
@@ -825,18 +866,27 @@ const ReportsPage = () => {
           ariaLabel="Reporting period"
         />
 
-        <button
-          type="button"
-          className="rep__range"
-          onClick={() => setRangeSheet(true)}
-          aria-haspopup="dialog"
-          aria-expanded={rangeSheet}
-          aria-label={`Period, ${rangeLabel}. Change`}
-        >
-          <CalendarIcon size={15} />
-          <span>{rangeLabel}</span>
-          <ChevronDownIcon size={13} className="rep__range-chevron" />
-        </button>
+        <div className="rep__filters-row">
+          <button
+            type="button"
+            className="rep__range"
+            onClick={() => setRangeSheet(true)}
+            aria-haspopup="dialog"
+            aria-expanded={rangeSheet}
+            aria-label={`Period, ${rangeLabel}. Change`}
+          >
+            <CalendarIcon size={15} />
+            <span>{rangeLabel}</span>
+            <ChevronDownIcon size={13} className="rep__range-chevron" />
+          </button>
+
+          <Chip
+            selected={onlyOwn}
+            onClick={() => setOnlyOwn((prev) => !prev)}
+          >
+            My Vehicles
+          </Chip>
+        </div>
       </div>
 
       {/* 2 — the take-away, in words and one concrete number, with a comparison

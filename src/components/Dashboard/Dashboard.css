@@ -32,6 +32,18 @@
   margin-bottom: var(--gap-3);
 }
 
+.home-block__filters {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-2);
+  margin-bottom: var(--gap-3);
+  flex-wrap: wrap;
+}
+
+.home-block__filters .field26 {
+  flex: 1 1 180px;
+}
+
 .home-block__footer-link {
   margin-top: var(--gap-2);
   min-height: 38px;

@@ -16,7 +16,18 @@ import './chrome.css';
 
 const SCROLL_ON = 6;
 
-export const useScrolled = (threshold = SCROLL_ON) => {
+/**
+ * Detects whether content has scrolled past a threshold.
+ *
+ * Checks the provided element first, then falls back to window — so it
+ * works regardless of which element is the actual scroll host.
+ */
+export const useScrolled = (thresholdOrElement = SCROLL_ON, maybeElement) => {
+  const threshold =
+    typeof thresholdOrElement === 'number' ? thresholdOrElement : SCROLL_ON;
+  const element =
+    maybeElement || (typeof thresholdOrElement === 'object' ? thresholdOrElement : null);
+
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -24,7 +35,14 @@ export const useScrolled = (threshold = SCROLL_ON) => {
 
     const read = () => {
       frame = 0;
-      setScrolled((window.scrollY || document.documentElement.scrollTop || 0) > threshold);
+      const y = element
+        ? element.scrollTop
+        : Math.max(
+            window.scrollY || 0,
+            document.documentElement.scrollTop || 0,
+            document.body.scrollTop || 0
+          );
+      setScrolled(y > threshold);
     };
 
     const onScroll = () => {
@@ -32,12 +50,22 @@ export const useScrolled = (threshold = SCROLL_ON) => {
     };
 
     read();
-    window.addEventListener('scroll', onScroll, { passive: true });
+
+    // Listen to the element if provided, otherwise window.
+    // Also listen to window and document.body as fallbacks — the actual scroll
+    // host depends on the CSS layout (overflow, flex, etc.) and in this app
+    // body is the real scroll container (html/body height:100% + overflow-x:hidden
+    // computes overflow-y:auto on body without propagating to the viewport).
+    const targets = [];
+    if (element) targets.push(element);
+    targets.push(window, document.body);
+    targets.forEach((t) => t.addEventListener('scroll', onScroll, { passive: true }));
+
     return () => {
-      window.removeEventListener('scroll', onScroll);
+      targets.forEach((t) => t.removeEventListener('scroll', onScroll));
       if (frame) cancelAnimationFrame(frame);
     };
-  }, [threshold]);
+  }, [threshold, element]);
 
   return scrolled;
 };
@@ -114,17 +142,19 @@ export const NavButton = ({ label, badge = false, onClick, className = '', child
 
 /**
  * Search affordance: a Liquid Glass capsule that reads as a field rather than
- * a bare icon, so it's obvious it opens search. Collapses to a circle on narrow
- * screens where the label won't fit.
+ * a bare icon, so it's obvious it opens search. On the home screen the label
+ * is visible; on other pages it collapses to an icon-only circle with a
+ * smooth width transition — matching Apple's toolbar search pattern where
+ * the field is compact and secondary to the centered title.
  */
-export const NavSearchButton = ({ label = 'Search', placeholder = 'Search', onClick }) => (
+export const NavSearchButton = ({ label = 'Search', placeholder = 'Search', home = false, onClick }) => (
   <GlassSurface
     as="button"
     type="button"
     capsule
     interactive
     variant="regular"
-    className="nav26__search"
+    className={`nav26__search ${home ? 'is-home' : ''}`.trim()}
     aria-label={label}
     onClick={onClick}
   >

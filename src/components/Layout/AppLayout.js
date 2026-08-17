@@ -45,11 +45,7 @@ const AppLayout = ({ children }) => {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [dueCount, setDueCount] = useState(0);
 
-  // A screen with pending edits hands its Cancel / commit pair to the nav bar
-  // rather than growing an action bar over its own content.
   const [editSession, setEditSession] = useState(null);
-  // setState from useState is referentially stable, so the context value never
-  // changes and consumers don't re-render on unrelated layout state.
   const editCtx = React.useMemo(() => setEditSession, []);
   const editing = Boolean(editSession);
 
@@ -57,6 +53,48 @@ const AppLayout = ({ children }) => {
   const isHome = path === '/';
   const isTabRoot = TABS.some((tab) => tab.value === path);
   const isAddTrip = path === '/add-entry';
+
+  // Direct scroll listener — no hook, no ref, no guessing which element
+  // scrolls. Checks both .app-content and window so it works regardless
+  // of the CSS layout.
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    let frame = 0;
+    const THRESHOLD = 6;
+
+    const read = () => {
+      frame = 0;
+      // Whatever actually scrolls — the window, the documentElement, or the
+      // content column — the max of all of them can't miss it. Using only
+      // one source was the bug: .app-content has overflow-x:clip so its
+      // scrollTop is always 0, which masked window scroll.
+      const contentEl = document.querySelector('.app-content');
+      const y = Math.max(
+        window.scrollY || 0,
+        document.documentElement.scrollTop || 0,
+        document.body.scrollTop || 0,
+        contentEl ? contentEl.scrollTop : 0
+      );
+      setScrolled(y > THRESHOLD);
+    };
+
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(read);
+    };
+
+    read();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    document.body.addEventListener('scroll', onScroll, { passive: true });
+    const contentEl = document.querySelector('.app-content');
+    if (contentEl) contentEl.addEventListener('scroll', onScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      document.body.removeEventListener('scroll', onScroll);
+      if (contentEl) contentEl.removeEventListener('scroll', onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,35 +113,31 @@ const AppLayout = ({ children }) => {
     tab.value === '/str-status' ? { ...tab, badge: dueCount } : tab
   );
 
+  // After scrolling on home, switch to compact NavBar: no logo, no large
+  // title, empty title — same shape as other pages.
+  const showLargeTitle = isHome && !editing && !scrolled;
+  const showLogo = isHome && !editing && !scrolled;
+
   return (
     <div className="app-shell">
       <NavBar
-        title={TITLES[path] || 'Suhel Roadlines'}
+        title={showLargeTitle ? 'Suhel Roadlines' : (TITLES[path] || 'Suhel Roadlines')}
         subtitle={editSession?.status || null}
-        largeTitle={isHome && !editing}
+        largeTitle={showLargeTitle}
         transparent
         leading={
           editing ? (
             <Button variant="plain" size="sm" onClick={editSession.onCancel}>
               {editSession.cancelLabel || 'Cancel'}
             </Button>
-          ) : isTabRoot ? (
-            isHome ? (
-              /* The real brand mark, same geometry as the Home Screen icon
-                 (src/brand/artwork.js). This was a text "SR" monogram while the
-                 installed icon was React's logo — two identities, neither the
-                 app's own. Decorative: the nav title already says the name, so a
-                 label here would make VoiceOver read it twice. */
-              <AppMark size={34} className="brand-avatar" />
-            ) : null
-          ) : (
+          ) : showLogo ? (
+            <AppMark size={34} className="brand-avatar" />
+          ) : isTabRoot ? null : (
             <BackButton onClick={() => navigate(-1)} />
           )
         }
         trailing={
           editing ? (
-            /* Search and notifications step aside: while an edit session is
-               open the only trailing action is the one that commits it. */
             <Button
               variant="filled"
               size="sm"
@@ -116,7 +150,11 @@ const AppLayout = ({ children }) => {
             </Button>
           ) : (
             <>
-              <NavSearchButton placeholder="Search trips" onClick={() => setSearchOpen(true)} />
+              <NavSearchButton
+                placeholder="Search trips"
+                home={isHome && !scrolled}
+                onClick={() => setSearchOpen(true)}
+              />
               <NavButton
                 label={dueCount > 0 ? `Notifications, ${dueCount} pending` : 'Notifications'}
                 badge={dueCount > 0}
@@ -131,12 +169,6 @@ const AppLayout = ({ children }) => {
 
       <main className="app-content">
         <EditSessionContext.Provider value={editCtx}>
-          {/* RouteTransition was removed: it stored a cloned Routes in state and
-              only applied the new location after an effect fired + setState,
-              creating a one-frame gap where the URL had updated but the screen
-              still showed stale content. On phones this gap was visible as the
-              "tab switch freeze". React Router handles location natively through
-              context — no intermediate state needed. */}
           {children}
         </EditSessionContext.Provider>
       </main>

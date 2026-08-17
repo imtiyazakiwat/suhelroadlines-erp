@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { homeService, formatCompactINR, formatINR, isStrReceived, joinTripAdvances, toDate } from '../../services/homeService';
 import { tripService, advanceService, vehicleService } from '../../services/firebaseService';
+import { fastSync } from '../../services/fastSync';
 import { formatVehicleNumber, sameText } from '../../services/textService';
 import {
   Card,
@@ -15,7 +16,9 @@ import {
   Skeleton,
   Button,
   GlassSurface,
-  BarChart
+  BarChart,
+  SearchField,
+  Chip
 } from '../../ui';
 import {
   TruckIcon,
@@ -39,12 +42,31 @@ const EMPTY_SUMMARY = {
   month: { label: '', advance: 0, trips: 0, deltaPct: null, series: [] }
 };
 
+/** Number of recent trips shown on the home screen before "See All". */
+const PREVIEW_COUNT = 5;
+
+/**
+ * Derive the joined trip list from whatever collections we already have in the
+ * fastSync cache. Zero-network cost — just an in-memory join and sort.
+ */
+const deriveTripsFromCache = () => {
+  const tripList = fastSync.getMemory('trips') || [];
+  const advanceList = fastSync.getMemory('advances') || [];
+  if (!tripList.length) return [];
+  const { trips } = joinTripAdvances(tripList, advanceList);
+  return trips
+    .slice()
+    .sort((a, b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0));
+};
+
 const SimpleDashboard = () => {
   const navigate = useNavigate();
   const [summary, setSummary] = useState(EMPTY_SUMMARY);
-  const [trips, setTrips] = useState([]);
-  const [vehicles, setVehicles] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [trips, setTrips] = useState(() => deriveTripsFromCache());
+  const [vehicles, setVehicles] = useState(() => fastSync.getMemory('vehicles') || []);
+  const [loading, setLoading] = useState(() => !fastSync.getMemory('trips')?.length);
+  const [vehicleQuery, setVehicleQuery] = useState('');
+  const [onlyOwn, setOnlyOwn] = useState(false);
 
   const isOwnTrip = useCallback(
     (record) => {
@@ -67,9 +89,6 @@ const SimpleDashboard = () => {
       ]);
       setSummary(data);
       setVehicles(vehicleList || []);
-      // The All Trips list. Same join helper Reports uses, so the two screens
-      // can never disagree on what a trip was advanced; sorted newest first.
-      // These are fastSync cache reads, so the extra join costs no network.
       const joined = joinTripAdvances(tripList || [], advanceList || []);
       setTrips(
         joined.trips
@@ -77,7 +96,6 @@ const SimpleDashboard = () => {
           .sort((a, b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0))
       );
     } catch (error) {
-      console.warn('Home summary unavailable:', error.message);
       setSummary(EMPTY_SUMMARY);
     } finally {
       setLoading(false);
@@ -87,6 +105,20 @@ const SimpleDashboard = () => {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Filter trips by vehicle/driver query, then slice to the preview count.
+  const filteredTrips = useMemo(() => {
+    const term = vehicleQuery.trim().toLowerCase();
+    return trips.filter((trip) => {
+      if (onlyOwn && !isOwnTrip(trip)) return false;
+      if (!term) return true;
+      const haystack = `${trip.vehicleNumber || ''} ${trip.driverName || ''}`.toLowerCase();
+      return haystack.includes(term);
+    });
+  }, [trips, vehicleQuery, onlyOwn, isOwnTrip]);
+
+  const previewTrips = useMemo(() => filteredTrips.slice(0, PREVIEW_COUNT), [filteredTrips]);
+  const hasMoreTrips = filteredTrips.length > PREVIEW_COUNT;
 
   const quickActions = [
     {
@@ -149,26 +181,39 @@ const SimpleDashboard = () => {
         </div>
       </section>
 
-      {/* ------------------------------- All trips ------------------------------- */}
-      {/* The trip list comes first because it is the most actionable section on
-          Home: the records are what the owner checks every morning. The fleet
-          card answers a question ("how many vehicles") that can be answered with
-          a glance; the trips list shows what actually happened. Rows mirror the
-          Reports records tab — same fields, same join, same date format — so the
-          two screens never disagree. Plain rows, no stagger, no glass: content
-          stays cheap to render on every device; the expensive material belongs to
-          the chrome alone. Tapping a row drills into the Reports records view,
-          where the search field can find any trip. */}
+      {/* ------------------------------- Recent trips ------------------------------- */}
+      {/* Shows the 5 most recent trips as a preview. The full list lives in
+          Reports, which is one tap away. Tapping a row opens that trip's detail
+          sheet directly — no need to hunt for it in a long list.
+
+          Why 5: enough to see yesterday's activity and today's first trips
+          without pushing the fleet card below the fold. iOS's Stocks preview
+          shows 5 items for the same reason — it is the point where the list
+          communicates "what happened" without becoming the screen. */}
       <section className="home-block">
         <SectionHeader
-          title="All Trips"
+          title="Recent Trips"
           onAction={() => navigate('/reports?tab=trips')}
           className="home-block__header"
         />
 
-        {trips.length > 0 ? (
+        <div className="home-block__filters">
+          <SearchField
+            value={vehicleQuery}
+            onChange={(e) => setVehicleQuery(e.target.value)}
+            placeholder="Filter by vehicle or driver"
+          />
+          <Chip
+            selected={onlyOwn}
+            onClick={() => setOnlyOwn((prev) => !prev)}
+          >
+            My Vehicles
+          </Chip>
+        </div>
+
+        {previewTrips.length > 0 ? (
           <ListSection inset={false}>
-            {trips.map((trip) => {
+            {previewTrips.map((trip) => {
               const received = isStrReceived(trip);
               const when = toDate(trip.date);
               return (
@@ -188,7 +233,7 @@ const SimpleDashboard = () => {
                   value={formatINR(trip.totalAdvances)}
                   className={isOwnTrip(trip) ? 'lst26__row--own' : ''}
                   chevron
-                  onClick={() => navigate('/reports?tab=trips')}
+                  onClick={() => navigate(`/reports?tab=trips&tripId=${trip.id}`)}
                 />
               );
             })}
@@ -201,6 +246,17 @@ const SimpleDashboard = () => {
               message="Trips you record will appear here."
             />
           </Card>
+        )}
+
+        {hasMoreTrips && (
+          <Button
+            variant="plain"
+            block
+            className="home-block__footer-link"
+            onClick={() => navigate('/reports?tab=trips')}
+          >
+            See All {filteredTrips.length} Trips
+          </Button>
         )}
       </section>
 
@@ -273,14 +329,6 @@ const SimpleDashboard = () => {
       </section>
 
       {/* --------------------------- This month + stats --------------------------- */}
-      {/* Replaces a "Save on Diesel Expenses — 4% Cashback" promo that was pure
-          invention: no such feature exists, nothing was ever redeemable, and it
-          took the most prominent slot on the screen. What belongs there is the
-          number the business actually runs on.
-
-          It summarises rather than analyses, and taps through to Reports for the
-          detail — the widget contract. The sparkline is a trend platter: shape
-          only, no axes, because this is a preview of the real chart. */}
       <section className="home-grid">
         <Card padded={false} inset={false} className="month">
           <button

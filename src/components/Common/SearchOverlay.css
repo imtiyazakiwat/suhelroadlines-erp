@@ -1,5 +1,10 @@
 /* Search sheet. Structure comes from the Sheet primitive; this only handles
-   the sticky control strip and result spacing. */
+   the sticky control strip and result spacing.
+
+   The sheet opens at medium detent (~60vh) — compact enough that results are
+   visible without scrolling past the keyboard. No title header: the
+   SearchField placeholder communicates intent, matching Apple's search
+   pattern in Settings, Mail and Notes. */
 
 .srch-sheet__controls {
   position: sticky;
@@ -8,7 +13,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--gap-2);
-  padding: 0 0 var(--gap-3);
   background: var(--glass-regular-tint);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);

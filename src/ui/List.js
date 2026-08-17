@@ -21,7 +21,7 @@ export const ListSection = ({ header, footer, inset = true, className = '', chil
   </section>
 );
 
-export const ListRow = React.forwardRef(
+export const ListRow = React.memo(React.forwardRef(
   (
     {
       as,
@@ -108,7 +108,7 @@ export const ListRow = React.forwardRef(
       </Tag>
     );
   }
-);
+));
 ListRow.displayName = 'ListRow';
 
 export const ListLink = React.forwardRef((props, ref) => <ListRow ref={ref} chevron {...props} />);

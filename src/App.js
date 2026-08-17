@@ -1,15 +1,8 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
 import AppLayout from './components/Layout/AppLayout';
 import SimpleDashboard from './components/Dashboard/SimpleDashboard';
-import SimpleAddEntry from './components/AddEntry/SimpleAddEntry';
-import SimpleAddAdvance from './components/AddAdvance/SimpleAddAdvance';
-import SimpleReports from './components/Reports/SimpleReports';
-import SimpleSettings from './components/Settings/SimpleSettings';
-import VehiclesPage from './components/Settings/VehiclesPage';
-import VillagesPage from './components/Settings/VillagesPage';
-import DataPage from './components/Settings/DataPage';
 import SimpleSTRStatus from './components/STRStatus/SimpleSTRStatus';
 import PWABridge from './components/Common/PWABridge';
 import { ToastProvider } from './ui';
@@ -18,6 +11,16 @@ import { ToastProvider } from './ui';
 // gone: Reports was the last screen on it, and its globals (border-box, heading
 // margin reset) moved to index.css.
 import './styles/ios26.css';
+
+// Route-level code splitting. Dashboard and STR Status are eager (tab roots,
+// visible on first paint). Everything else loads only when navigated to.
+const SimpleAddEntry = React.lazy(() => import('./components/AddEntry/SimpleAddEntry'));
+const SimpleAddAdvance = React.lazy(() => import('./components/AddAdvance/SimpleAddAdvance'));
+const SimpleReports = React.lazy(() => import('./components/Reports/SimpleReports'));
+const SimpleSettings = React.lazy(() => import('./components/Settings/SimpleSettings'));
+const VehiclesPage = React.lazy(() => import('./components/Settings/VehiclesPage'));
+const VillagesPage = React.lazy(() => import('./components/Settings/VillagesPage'));
+const DataPage = React.lazy(() => import('./components/Settings/DataPage'));
 
 function App() {
   return (
@@ -29,19 +32,21 @@ function App() {
       <PWABridge />
       <Router>
         <AppLayout>
-          <Routes>
-            <Route path="/" element={<SimpleDashboard />} />
-            <Route path="/add-entry" element={<SimpleAddEntry />} />
-            <Route path="/add-advance" element={<SimpleAddAdvance />} />
-            <Route path="/reports" element={<SimpleReports />} />
-            <Route path="/str-status" element={<SimpleSTRStatus />} />
-            <Route path="/settings" element={<SimpleSettings />} />
-            {/* Pushed from Settings, so they get a Back button and real deep links
-                instead of a sheet opened from inside another sheet. */}
-            <Route path="/settings/vehicles" element={<VehiclesPage />} />
-            <Route path="/settings/villages" element={<VillagesPage />} />
-            <Route path="/settings/data" element={<DataPage />} />
-          </Routes>
+          <Suspense fallback={null}>
+            <Routes>
+              <Route path="/" element={<SimpleDashboard />} />
+              <Route path="/add-entry" element={<SimpleAddEntry />} />
+              <Route path="/add-advance" element={<SimpleAddAdvance />} />
+              <Route path="/reports" element={<SimpleReports />} />
+              <Route path="/str-status" element={<SimpleSTRStatus />} />
+              <Route path="/settings" element={<SimpleSettings />} />
+              {/* Pushed from Settings, so they get a Back button and real deep links
+                  instead of a sheet opened from inside another sheet. */}
+              <Route path="/settings/vehicles" element={<VehiclesPage />} />
+              <Route path="/settings/villages" element={<VillagesPage />} />
+              <Route path="/settings/data" element={<DataPage />} />
+            </Routes>
+          </Suspense>
         </AppLayout>
       </Router>
     </ToastProvider>
