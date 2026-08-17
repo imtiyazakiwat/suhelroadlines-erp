@@ -60,13 +60,19 @@ const ImagePicker = ({ value, onChange, label, hint, error, disabled, className 
 
   return (
     <Field label={label} hint={hint} error={error || uploadError} className={`imgpkr ${className}`.trim()}>
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={disabled || uploading ? -1 : 0}
         className={`imgpkr__trigger ${value ? 'imgpkr__trigger--has-image' : ''} ${
           disabled || uploading ? 'imgpkr__trigger--disabled' : ''
         }`}
         onClick={() => !disabled && !uploading && inputRef.current?.click()}
-        disabled={disabled || uploading}
+        onKeyDown={(e) => {
+          if ((e.key === 'Enter' || e.key === ' ') && !disabled && !uploading) {
+            e.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
         aria-label={value ? 'Change image' : 'Add image'}
       >
         {value ? (
@@ -99,7 +105,7 @@ const ImagePicker = ({ value, onChange, label, hint, error, disabled, className 
             </svg>
           </button>
         )}
-      </button>
+      </div>
 
       <input
         ref={inputRef}
