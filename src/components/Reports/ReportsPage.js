@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CSVLink } from 'react-csv';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import {
   format,
   startOfDay,
@@ -728,7 +728,7 @@ const ReportsPage = () => {
     const head = [csv.headers.map((h) => h.label)];
     const body = csv.rows.map((row) => csv.headers.map((h) => String(row[h.key] ?? '')));
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: 26,
       head,
       body,
