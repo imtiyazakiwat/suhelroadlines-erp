@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { homeService, formatCompactINR, formatINR, isStrReceived, joinTripAdvances, toDate } from '../../services/homeService';
-import { tripService, advanceService } from '../../services/firebaseService';
-import { formatVehicleNumber } from '../../services/textService';
+import { tripService, advanceService, vehicleService } from '../../services/firebaseService';
+import { formatVehicleNumber, sameText } from '../../services/textService';
 import {
   Card,
   SectionHeader,
@@ -43,19 +43,30 @@ const SimpleDashboard = () => {
   const navigate = useNavigate();
   const [summary, setSummary] = useState(EMPTY_SUMMARY);
   const [trips, setTrips] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const isOwnTrip = useCallback(
+    (record) => {
+      const vehicle = vehicles.find((v) => sameText(v.vehicleNumber, record.vehicleNumber));
+      return vehicle?.isOwn === true;
+    },
+    [vehicles]
+  );
 
   const load = useCallback(async () => {
     try {
-      const [data, tripList, advanceList] = await Promise.all([
+      const [data, tripList, advanceList, vehicleList] = await Promise.all([
         Promise.race([
           homeService.getHomeSummary(),
           new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 12000))
         ]),
         tripService.getAllTrips().catch(() => []),
-        advanceService.getAllAdvances().catch(() => [])
+        advanceService.getAllAdvances().catch(() => []),
+        vehicleService.getAllVehicles().catch(() => [])
       ]);
       setSummary(data);
+      setVehicles(vehicleList || []);
       // The All Trips list. Same join helper Reports uses, so the two screens
       // can never disagree on what a trip was advanced; sorted newest first.
       // These are fastSync cache reads, so the extra join costs no network.
@@ -175,6 +186,7 @@ const SimpleDashboard = () => {
                     trip.villages?.length ? ` · ${trip.villages.join(', ')}` : ''
                   }`}
                   value={formatINR(trip.totalAdvances)}
+                  className={isOwnTrip(trip) ? 'lst26__row--own' : ''}
                   chevron
                   onClick={() => navigate('/reports?tab=trips')}
                 />

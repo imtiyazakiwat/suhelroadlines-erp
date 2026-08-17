@@ -225,6 +225,15 @@ const ReportsPage = () => {
   const [villages, setVillages] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  /* Helper: check if a trip/advance belongs to an own vehicle. */
+  const isOwnTrip = useCallback(
+    (record) => {
+      const vehicle = vehicles.find((v) => sameText(v.vehicleNumber, record.vehicleNumber));
+      return vehicle?.isOwn === true;
+    },
+    [vehicles]
+  );
+
   const [measure, setMeasure] = useState('advance');
   const [query, setQuery] = useState('');
   const [selectedBar, setSelectedBar] = useState(null);
@@ -996,6 +1005,7 @@ const ReportsPage = () => {
                       trip.villages?.length ? ` · ${trip.villages.join(', ')}` : ''
                     }`}
                     value={formatINR(trip.totalAdvances)}
+                    className={isOwnTrip(trip) ? 'lst26__row--own' : ''}
                     chevron
                     onClick={() => setDetailTrip(trip)}
                   />
@@ -1026,6 +1036,7 @@ const ReportsPage = () => {
                 subtitle={item.advanceType === 'initial' ? 'Opening advance' : 'Top-up'}
                 detail={`${dateText(advanceWhen(item))}${item.note ? ` · ${item.note}` : ''}`}
                 value={formatINR(item.advanceAmount)}
+                className={isOwnTrip(item) ? 'lst26__row--own' : ''}
               />
             ))}
           </ListSection>

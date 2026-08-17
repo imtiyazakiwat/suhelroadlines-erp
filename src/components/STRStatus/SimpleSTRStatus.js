@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { tripService } from '../../services/firebaseService';
+import { tripService, vehicleService } from '../../services/firebaseService';
 import { isStrReceived, formatINR, toDate } from '../../services/homeService';
-import { formatVehicleNumber } from '../../services/textService';
+import { formatVehicleNumber, sameText } from '../../services/textService';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import {
   Button,
@@ -40,6 +40,7 @@ const SimpleSTRStatus = () => {
   const toast = useToast();
 
   const [trips, setTrips] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirtyIds, setDirtyIds] = useState(() => new Set());
@@ -56,6 +57,14 @@ const SimpleSTRStatus = () => {
   const statusFilter = STATUS_TABS.some((tab) => tab.value === searchParams.get('filter'))
     ? searchParams.get('filter')
     : 'all';
+
+  const isOwnTrip = useCallback(
+    (record) => {
+      const vehicle = vehicles.find((v) => sameText(v.vehicleNumber, record.vehicleNumber));
+      return vehicle?.isOwn === true;
+    },
+    [vehicles]
+  );
 
   const setStatusFilter = (value) => {
     const next = new URLSearchParams(searchParams);
@@ -77,6 +86,7 @@ const SimpleSTRStatus = () => {
       const loaded = await tripService.getTripsByDateRange(startDate, endDate);
       baseline.current = loaded;
       setTrips(loaded);
+      vehicleService.getAllVehicles().then((list) => setVehicles(list || [])).catch(() => {});
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('Could not load trips');
@@ -342,8 +352,9 @@ const SimpleSTRStatus = () => {
                   </Badge>
                 }
                 accessory={dirty ? <span className="str__dirty" aria-label="Unsaved" /> : null}
+                className={[isOwnTrip(trip) ? 'lst26__row--own' : '', dirty ? 'is-dirty' : '']
+                  .filter(Boolean).join(' ')}
                 onClick={() => toggleStatus(trip)}
-                className={dirty ? 'is-dirty' : ''}
               />
             );
           })}
