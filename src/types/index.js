@@ -12,7 +12,8 @@ export const createTripEntry = ({
   mobileNumber,
   advanceAmount = 0,
   vehicleType = 'lorry',
-  strStatus = 'not received'
+  strStatus = 'not received',
+  imageUrl = ''
 }) => ({
   id: null, // Will be set by Firestore
   slNumber: slNumber || 0,
@@ -26,6 +27,7 @@ export const createTripEntry = ({
   advanceAmount: advanceAmount,
   vehicleType: vehicleType,
   strStatus: strStatus,
+  imageUrl: imageUrl || '',
   createdAt: new Date(),
   updatedAt: new Date()
 });
@@ -72,7 +74,8 @@ export const createAdvance = ({
   tripDate,
   advanceAmount,
   note = '',
-  advanceType = 'additional' // 'initial' or 'additional'
+  advanceType = 'additional', // 'initial' or 'additional'
+  imageUrl = ''
 }) => ({
   id: null, // Will be set by Firestore
   vehicleNumber: vehicleNumber || '',
@@ -81,6 +84,7 @@ export const createAdvance = ({
   advanceAmount: advanceAmount || 0,
   advanceType: advanceType, // NEW: Type of advance
   note: note,
+  imageUrl: imageUrl || '',
   isSettled: false,
   createdAt: new Date()
 });

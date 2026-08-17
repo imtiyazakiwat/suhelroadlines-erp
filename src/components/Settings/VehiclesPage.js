@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { vehicleService } from '../../services/firebaseService';
 import {
   Button,
+  ImagePicker,
   Segmented,
   SearchField,
   TextField,
@@ -76,7 +77,8 @@ const EMPTY = {
   // Defaults to false, not true: a new vehicle has not been asked yet, and
   // pre-ticking "mine" would put hired lorries in the wrong group by default.
   isOwn: false,
-  isActive: true
+  isActive: true,
+  imageUrl: ''
 };
 
 /** Missing field means "never marked", which is not the same as "mine". */
@@ -169,7 +171,8 @@ const VehiclesPage = () => {
       mobileNumber: vehicle.mobileNumber || '',
       vehicleType: vehicle.vehicleType || 'lorry',
       isOwn: isOwnVehicle(vehicle),
-      isActive: vehicle.isActive !== false
+      isActive: vehicle.isActive !== false,
+      imageUrl: vehicle.imageUrl || ''
     });
   };
 
@@ -211,7 +214,8 @@ const VehiclesPage = () => {
         mobileNumber: String(draft.mobileNumber || '').trim(),
         vehicleType: draft.vehicleType,
         isOwn: draft.isOwn === true,
-        isActive: draft.isActive
+        isActive: draft.isActive,
+        imageUrl: draft.imageUrl || ''
       };
 
       if (draft.existing) {
@@ -447,6 +451,20 @@ const VehiclesPage = () => {
                   onChange={(event) => setField('mobileNumber', event.target.value)}
                   placeholder="Optional"
                   error={errors.mobileNumber}
+                />
+              </ListRow>
+            </ListSection>
+
+            <ListSection
+              inset={false}
+              header="Photo"
+              footer="Optional — a photo of the lorry, registration book, or anything relevant."
+            >
+              <ListRow>
+                <ImagePicker
+                  value={draft.imageUrl}
+                  onChange={(url) => setField('imageUrl', url)}
+                  disabled={saving}
                 />
               </ListRow>
             </ListSection>

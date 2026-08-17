@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 import {
   Card,
   Chip,
+  ImagePicker,
   ListSection,
   ListRow,
   Picker,
@@ -59,7 +60,8 @@ const AddEntryForm = () => {
     quantity: '',
     driverName: '',
     mobileNumber: '',
-    advanceAmount: ''
+    advanceAmount: '',
+    imageUrl: ''
   });
 
   const [vehicles, setVehicles] = useState([]);
@@ -301,7 +303,8 @@ const AddEntryForm = () => {
         quantity: parseFloat(formData.quantity),
         driverName: titleCase(formData.driverName),
         mobileNumber: formData.mobileNumber.trim(),
-        advanceAmount: parseFloat(formData.advanceAmount) || 0
+        advanceAmount: parseFloat(formData.advanceAmount) || 0,
+        imageUrl: formData.imageUrl
       });
 
       // The trip, and — when an amount was entered — its opening advance, which
@@ -539,6 +542,16 @@ const AddEntryForm = () => {
             value={formData.strNumber}
             onChange={(value) => setField('strNumber', value)}
             ariaLabel="STR status"
+          />
+        </ListRow>
+      </ListSection>
+
+      <ListSection header="Photo" footer="Optional — a delivery challan, lorry photo, or anything relevant to this trip.">
+        <ListRow>
+          <ImagePicker
+            value={formData.imageUrl}
+            onChange={(url) => setField('imageUrl', url)}
+            disabled={saving}
           />
         </ListRow>
       </ListSection>

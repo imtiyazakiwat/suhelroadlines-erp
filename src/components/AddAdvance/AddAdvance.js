@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import {
   Button,
   Card,
+  ImagePicker,
   ListSection,
   ListRow,
   Picker,
@@ -41,7 +42,8 @@ const AddAdvance = () => {
     selectedTripId: '',
     amount: '',
     date: format(new Date(), 'yyyy-MM-dd'),
-    note: ''
+    note: '',
+    imageUrl: ''
   });
 
   const [vehicles, setVehicles] = useState([]);
@@ -173,7 +175,8 @@ const AddAdvance = () => {
         tripDate: selectedTrip.date,
         advanceAmount: amountValue,
         note: formData.note.trim(),
-        advanceType: 'additional'
+        advanceType: 'additional',
+        imageUrl: formData.imageUrl
       });
 
       await advanceService.addAdvance(advanceData);
@@ -337,6 +340,13 @@ const AddAdvance = () => {
             onChange={(e) => setField('note', e.target.value)}
             placeholder="Cash at pump, driver request…"
             rows={3}
+          />
+        </ListRow>
+        <ListRow>
+          <ImagePicker
+            value={formData.imageUrl}
+            onChange={(url) => setField('imageUrl', url)}
+            disabled={saving}
           />
         </ListRow>
       </ListSection>
