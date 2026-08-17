@@ -11,6 +11,8 @@
    ========================================================================== */
 
 const IMGBB_ENDPOINT = 'https://api.imgbb.com/1/upload';
+/* Album hash from https://ibb.co/album/2ZY1Rx — all uploads go here. */
+const IMGBB_ALBUM = '2ZY1Rx';
 
 const getApiKey = () => process.env.REACT_APP_IMGBB_KEY || '';
 
@@ -94,6 +96,7 @@ export const uploadToImgbb = async (blob, { name } = {}) => {
   const form = new FormData();
   form.append('key', key);
   form.append('image', blob);
+  form.append('album', IMGBB_ALBUM);
   if (name) form.append('name', name);
 
   const response = await fetch(`${IMGBB_ENDPOINT}?key=${key}`, {
