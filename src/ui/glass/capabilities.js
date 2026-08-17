@@ -49,13 +49,26 @@ const supportsBackdropSvgFilter = () => {
   return isBlink;
 };
 
+/**
+ * Displacement is only worth its cost on a screen that can re-filter its
+ * backdrop cheaply. The filter chain runs again every time content changes
+ * beneath the chrome — every tab switch and list swap — and on a phone GPU a
+ * three-tap feDisplacementMap over the nav and tab bars is a multi-frame stall
+ * that reads as "the app froze" (the Reports tab-switch bug this fixed). Phones
+ * get the frost tier instead: the same blur material iOS itself uses, and cheap
+ * enough to re-evaluate per frame. The refracting fringe is invisible at phone
+ * sizes anyway. 1024px keeps small tablets out of the slow path too.
+ */
+const prefersDisplacementViewport = () =>
+  typeof window !== 'undefined' && window.innerWidth >= 1024;
+
 /** @returns {'displacement'|'frost'|'opaque'} */
 export const detectGlassTier = () => {
   if (cached) return cached;
 
   if (prefersReducedTransparency() || !supportsBackdropFilter()) {
     cached = 'opaque';
-  } else if (supportsBackdropSvgFilter()) {
+  } else if (supportsBackdropSvgFilter() && prefersDisplacementViewport()) {
     cached = 'displacement';
   } else {
     cached = 'frost';

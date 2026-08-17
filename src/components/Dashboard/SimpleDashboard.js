@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { homeService, formatCompactINR, formatINR } from '../../services/homeService';
+import { format } from 'date-fns';
+import { homeService, formatCompactINR, formatINR, isStrReceived, joinTripAdvances, toDate } from '../../services/homeService';
+import { tripService, advanceService } from '../../services/firebaseService';
+import { formatVehicleNumber } from '../../services/textService';
 import {
   Card,
   SectionHeader,
@@ -39,15 +42,29 @@ const EMPTY_SUMMARY = {
 const SimpleDashboard = () => {
   const navigate = useNavigate();
   const [summary, setSummary] = useState(EMPTY_SUMMARY);
+  const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
-      const data = await Promise.race([
-        homeService.getHomeSummary(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 12000))
+      const [data, tripList, advanceList] = await Promise.all([
+        Promise.race([
+          homeService.getHomeSummary(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 12000))
+        ]),
+        tripService.getAllTrips().catch(() => []),
+        advanceService.getAllAdvances().catch(() => [])
       ]);
       setSummary(data);
+      // The All Trips list. Same join helper Reports uses, so the two screens
+      // can never disagree on what a trip was advanced; sorted newest first.
+      // These are fastSync cache reads, so the extra join costs no network.
+      const joined = joinTripAdvances(tripList || [], advanceList || []);
+      setTrips(
+        joined.trips
+          .slice()
+          .sort((a, b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0))
+      );
     } catch (error) {
       console.warn('Home summary unavailable:', error.message);
       setSummary(EMPTY_SUMMARY);
@@ -142,6 +159,55 @@ const SimpleDashboard = () => {
           </div>
         </div>
       </Card>
+
+      {/* ------------------------------- All trips ------------------------------- */}
+      {/* The fleet card answers "how many vehicles"; this answers "what trips
+          exist", complete and unscoped, because Reports scopes to a period. Rows
+          mirror the Reports records tab — same fields, same join, same date
+          format — so the two screens never disagree. Plain rows, no stagger, no
+          glass: this is content, and content must stay cheap to render on every
+          device; the expensive material belongs to the chrome alone. Tapping a
+          row drills into the Reports records view, where the search field can
+          find any trip. */}
+      <section className="home-block">
+        <SectionHeader
+          title="All Trips"
+          onAction={() => navigate('/reports?tab=trips')}
+          className="home-block__header"
+        />
+
+        {trips.length > 0 ? (
+          <ListSection inset={false}>
+            {trips.map((trip) => {
+              const received = isStrReceived(trip);
+              const when = toDate(trip.date);
+              return (
+                <ListRow
+                  key={trip.id}
+                  icon={received ? <DocCheckIcon size={17} /> : <DocAlertIcon size={17} />}
+                  iconTone={received ? 'success' : 'danger'}
+                  title={formatVehicleNumber(trip.vehicleNumber)}
+                  subtitle={`#${trip.slNumber ?? '—'} · ${trip.driverName || 'No driver'}`}
+                  detail={`${when ? format(when, 'd MMM yyyy') : '—'}${
+                    trip.villages?.length ? ` · ${trip.villages.join(', ')}` : ''
+                  }`}
+                  value={formatINR(trip.totalAdvances)}
+                  chevron
+                  onClick={() => navigate('/reports?tab=trips')}
+                />
+              );
+            })}
+          </ListSection>
+        ) : (
+          <Card padded={false} inset={false}>
+            <EmptyState
+              icon={<TruckIcon size={26} />}
+              title="No trips yet"
+              message="Trips you record will appear here."
+            />
+          </Card>
+        )}
+      </section>
 
       {/* --------------------------------- Reminders --------------------------------- */}
       <section className="home-block">
