@@ -138,37 +138,16 @@ const SimpleDashboard = () => {
         </div>
       </section>
 
-      {/* ------------------------------- Fleet summary ------------------------------- */}
-      <Card className="home-card">
-        <SectionHeader title="Total Vehicles" onAction={() => navigate('/settings')} />
-
-        <div className="fleet">
-          <span className="fleet__icon">
-            <TruckIcon size={28} />
-          </span>
-
-          <div className="fleet__count">
-            <span className="fleet__value">{summary.vehicles.total}</span>
-            <span className="fleet__caption">Total Vehicles</span>
-          </div>
-
-          <div className="fleet__stats">
-            <Stat value={summary.vehicles.active} label="Active" tone="success" dot />
-            <Stat value={summary.vehicles.inTransit} label="In Transit" tone="accent" dot />
-            <Stat value={summary.vehicles.inactive} label="Inactive" tone="neutral" dot />
-          </div>
-        </div>
-      </Card>
-
       {/* ------------------------------- All trips ------------------------------- */}
-      {/* The fleet card answers "how many vehicles"; this answers "what trips
-          exist", complete and unscoped, because Reports scopes to a period. Rows
-          mirror the Reports records tab — same fields, same join, same date
-          format — so the two screens never disagree. Plain rows, no stagger, no
-          glass: this is content, and content must stay cheap to render on every
-          device; the expensive material belongs to the chrome alone. Tapping a
-          row drills into the Reports records view, where the search field can
-          find any trip. */}
+      {/* The trip list comes first because it is the most actionable section on
+          Home: the records are what the owner checks every morning. The fleet
+          card answers a question ("how many vehicles") that can be answered with
+          a glance; the trips list shows what actually happened. Rows mirror the
+          Reports records tab — same fields, same join, same date format — so the
+          two screens never disagree. Plain rows, no stagger, no glass: content
+          stays cheap to render on every device; the expensive material belongs to
+          the chrome alone. Tapping a row drills into the Reports records view,
+          where the search field can find any trip. */}
       <section className="home-block">
         <SectionHeader
           title="All Trips"
@@ -208,6 +187,28 @@ const SimpleDashboard = () => {
           </Card>
         )}
       </section>
+
+      {/* ------------------------------- Fleet summary ------------------------------- */}
+      <Card className="home-card">
+        <SectionHeader title="Total Vehicles" onAction={() => navigate('/settings')} />
+
+        <div className="fleet">
+          <span className="fleet__icon">
+            <TruckIcon size={28} />
+          </span>
+
+          <div className="fleet__count">
+            <span className="fleet__value">{summary.vehicles.total}</span>
+            <span className="fleet__caption">Total Vehicles</span>
+          </div>
+
+          <div className="fleet__stats">
+            <Stat value={summary.vehicles.active} label="Active" tone="success" dot />
+            <Stat value={summary.vehicles.inTransit} label="In Transit" tone="accent" dot />
+            <Stat value={summary.vehicles.inactive} label="Inactive" tone="neutral" dot />
+          </div>
+        </div>
+      </Card>
 
       {/* --------------------------------- Reminders --------------------------------- */}
       <section className="home-block">
