@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { NavBar, NavButton, NavSearchButton, BackButton, TabBar, DockButton } from '../../ui/chrome';
 import Button from '../../ui/Button';
 import AppMark from '../../ui/brand/AppMark';
-import { RouteTransition } from '../../ui/motion';
 import { EditSessionContext } from './editSession';
 import SearchOverlay from '../Common/SearchOverlay';
 import NotificationsSheet from '../Common/NotificationsSheet';
@@ -132,7 +131,13 @@ const AppLayout = ({ children }) => {
 
       <main className="app-content">
         <EditSessionContext.Provider value={editCtx}>
-          <RouteTransition>{children}</RouteTransition>
+          {/* RouteTransition was removed: it stored a cloned Routes in state and
+              only applied the new location after an effect fired + setState,
+              creating a one-frame gap where the URL had updated but the screen
+              still showed stale content. On phones this gap was visible as the
+              "tab switch freeze". React Router handles location natively through
+              context — no intermediate state needed. */}
+          {children}
         </EditSessionContext.Provider>
       </main>
 
