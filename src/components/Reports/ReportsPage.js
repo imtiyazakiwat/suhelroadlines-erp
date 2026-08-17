@@ -533,7 +533,7 @@ const ReportsPage = () => {
       driverName: trip.driverName || '',
       mobileNumber: trip.mobileNumber || '',
       advanceAmount: trip.advanceAmount ?? '',
-      imageUrl: trip.imageUrl || ''
+      images: Array.isArray(trip.images) ? trip.images : (trip.imageUrl ? [trip.imageUrl] : [])
     });
     setErrors({});
   };
@@ -586,7 +586,7 @@ const ReportsPage = () => {
         driverName: titleCase(draft.driverName),
         mobileNumber: String(draft.mobileNumber).trim(),
         advanceAmount: nextAdvance,
-        imageUrl: draft.imageUrl || ''
+        images: draft.images || []
       });
 
       if (difference > 0) {
@@ -930,7 +930,10 @@ const ReportsPage = () => {
                 return (
                   <ListRow
                     key={trip.id}
-                    thumbnail={trip.imageUrl || undefined}
+                    thumbnail={
+                      (Array.isArray(trip.images) ? trip.images[0] : null) ||
+                      trip.imageUrl || undefined
+                    }
                     icon={received ? <DocCheckIcon size={17} /> : <DocAlertIcon size={17} />}
                     iconTone={received ? 'success' : 'danger'}
                     title={formatVehicleNumber(trip.vehicleNumber)}
@@ -959,7 +962,10 @@ const ReportsPage = () => {
             {visibleAdvances.map((item) => (
               <ListRow
                 key={item.id}
-                thumbnail={item.imageUrl || undefined}
+                thumbnail={
+                  (Array.isArray(item.images) ? item.images[0] : null) ||
+                  item.imageUrl || undefined
+                }
                 icon={<WalletIcon size={17} />}
                 iconTone={item.advanceType === 'initial' ? 'accent' : 'brand'}
                 title={formatVehicleNumber(item.vehicleNumber) || '—'}
@@ -1073,11 +1079,20 @@ const ReportsPage = () => {
               </Badge>
             </Card>
 
-            {detailTrip.imageUrl && (
-              <div className="rep__detail-photo">
-                <img src={detailTrip.imageUrl} alt="" loading="lazy" />
-              </div>
-            )}
+            {(() => {
+              const photos = Array.isArray(detailTrip.images) && detailTrip.images.length
+                ? detailTrip.images
+                : detailTrip.imageUrl ? [detailTrip.imageUrl] : [];
+              return photos.length > 0 ? (
+                <div className="rep__detail-photos">
+                  {photos.map((url, i) => (
+                    <div key={`${url}-${i}`} className="rep__detail-photo-tile">
+                      <img src={url} alt="" loading="lazy" />
+                    </div>
+                  ))}
+                </div>
+              ) : null;
+            })()}
 
             <ListSection inset={false} header="Trip">
               <ListRow title="Date" value={dateText(detailTrip.date)} />
@@ -1252,11 +1267,11 @@ const ReportsPage = () => {
               </ListRow>
             </ListSection>
 
-            <ListSection inset={false} header="Photo" footer="Optional — a delivery challan, lorry photo, or anything relevant.">
+            <ListSection inset={false} header="Photos" footer="Optional — a delivery challan, lorry photo, or anything relevant.">
               <ListRow>
                 <ImagePicker
-                  value={draft.imageUrl}
-                  onChange={(url) => setDraft((prev) => ({ ...prev, imageUrl: url }))}
+                  value={draft.images}
+                  onChange={(images) => setDraft((prev) => ({ ...prev, images }))}
                   disabled={saving}
                 />
               </ListRow>

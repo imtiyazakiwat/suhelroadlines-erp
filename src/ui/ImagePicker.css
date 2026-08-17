@@ -1,111 +1,40 @@
 /* --------------------------------------------------------------- ImagePicker */
 
-.imgpkr .fld__control {
-  min-height: 72px;
-}
-
-.imgpkr__trigger {
-  position: relative;
+/* Grid of thumbnail tiles + an "add" slot. */
+.imgpkr__grid {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  min-height: 72px;
-  padding: 6px;
-  background: var(--fill-4);
-  border: 1.5px dashed var(--separator);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Each tile: square thumbnail with a remove button in the corner. */
+.imgpkr__tile {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
   border-radius: var(--r-md);
-  cursor: pointer;
   overflow: hidden;
-  transition: border-color var(--dur-fast) var(--ease-out),
-    background-color var(--dur-fast) var(--ease-out);
+  background: var(--fill-4);
 }
-
-.imgpkr__trigger:hover {
-  border-color: var(--label-4);
-  background: var(--fill-3);
-}
-
-.imgpkr__trigger--has-image {
-  border-style: solid;
-  border-color: var(--separator);
-  padding: 0;
-}
-
-.imgpkr__trigger--disabled {
-  opacity: 0.5;
-  pointer-events: none;
-}
-
-/* ---- thumbnail */
 
 .imgpkr__thumb {
   display: block;
   width: 100%;
-  height: auto;
-  max-height: 160px;
+  height: 100%;
   object-fit: cover;
-  border-radius: calc(var(--r-md) - 1.5px);
 }
 
-/* ---- placeholder icon */
-
-.imgpkr__placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  color: var(--label-4);
-  background: var(--fill-3);
-  border-radius: 50%;
-  transition: color var(--dur-fast) var(--ease-out),
-    background-color var(--dur-fast) var(--ease-out);
-}
-
-.imgpkr__trigger:hover .imgpkr__placeholder {
-  color: var(--label-3);
-  background: var(--fill-4);
-}
-
-/* ---- spinner */
-
-.imgpkr__spinner {
+/* Remove button: translucent circle in the top-right corner. */
+.imgpkr__remove {
   position: absolute;
-  inset: 0;
+  top: 4px;
+  right: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0 0 0, 0.35);
-  border-radius: var(--r-md);
-}
-
-.imgpkr__spinner-ring {
-  width: 28px;
-  height: 28px;
-  border: 3px solid rgba(255 255 255 / 0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: imgpkr-spin 0.7s linear infinite;
-}
-
-@keyframes imgpkr-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* ---- clear button (top-right corner) */
-
-.imgpkr__clear {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   color: #fff;
   background: rgba(0 0 0, 0.5);
@@ -114,9 +43,46 @@
   cursor: pointer;
   z-index: 1;
 }
-
-.imgpkr__clear:hover {
+.imgpkr__remove:hover {
   background: rgba(0 0 0, 0.7);
+}
+
+/* Add-slot: dashed square matching the tile size. */
+.imgpkr__add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+  color: var(--label-4);
+  background: var(--fill-4);
+  border: 1.5px dashed var(--separator);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+.imgpkr__add:hover {
+  border-color: var(--label-3);
+  background: var(--fill-3);
+}
+
+/* ---- spinner (inside the add slot while uploading) */
+
+.imgpkr__spinner-ring {
+  width: 22px;
+  height: 22px;
+  border: 2.5px solid var(--separator);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: imgpkr-spin 0.7s linear infinite;
+}
+
+@keyframes imgpkr-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ---- hidden file input */

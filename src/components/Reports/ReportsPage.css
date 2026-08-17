@@ -220,17 +220,28 @@
   color: var(--label-1);
 }
 
-/* Trip photo: full-width inside the detail sheet, like a photo in a
-   Wallet pass. Rounded to match the card rhythm. */
-.rep__detail-photo {
+/* Trip photos: full-width inside the detail sheet, like photos in a
+   Wallet pass. Single image fills the width; multiple tile in a grid. */
+.rep__detail-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-bottom: var(--gap-4);
-  border-radius: var(--r-lg);
+}
+.rep__detail-photo-tile {
+  flex: 1 1 calc(50% - 4px);
+  min-width: 0;
+  border-radius: var(--r-md);
   overflow: hidden;
   background: var(--fill-4);
 }
-.rep__detail-photo img {
+.rep__detail-photo-tile img {
   width: 100%;
   display: block;
+}
+/* Single photo fills full width. */
+.rep__detail-photo-tile:only-child {
+  flex-basis: 100%;
 }
 
 @media (min-width: 620px) {

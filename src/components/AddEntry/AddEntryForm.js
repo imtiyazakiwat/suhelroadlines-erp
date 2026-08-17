@@ -61,7 +61,7 @@ const AddEntryForm = () => {
     driverName: '',
     mobileNumber: '',
     advanceAmount: '',
-    imageUrl: ''
+    images: []
   });
 
   const [vehicles, setVehicles] = useState([]);
@@ -304,7 +304,7 @@ const AddEntryForm = () => {
         driverName: titleCase(formData.driverName),
         mobileNumber: formData.mobileNumber.trim(),
         advanceAmount: parseFloat(formData.advanceAmount) || 0,
-        imageUrl: formData.imageUrl
+        images: formData.images
       });
 
       // The trip, and — when an amount was entered — its opening advance, which
@@ -546,11 +546,11 @@ const AddEntryForm = () => {
         </ListRow>
       </ListSection>
 
-      <ListSection header="Photo" footer="Optional — a delivery challan, lorry photo, or anything relevant to this trip.">
+      <ListSection header="Photos" footer="Optional — a delivery challan, lorry photo, or anything relevant to this trip.">
         <ListRow>
           <ImagePicker
-            value={formData.imageUrl}
-            onChange={(url) => setField('imageUrl', url)}
+            value={formData.images}
+            onChange={(images) => setField('images', images)}
             disabled={saving}
           />
         </ListRow>

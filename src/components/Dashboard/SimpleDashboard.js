@@ -163,7 +163,10 @@ const SimpleDashboard = () => {
               return (
                 <ListRow
                   key={trip.id}
-                  thumbnail={trip.imageUrl || undefined}
+                  thumbnail={
+                    (Array.isArray(trip.images) ? trip.images[0] : null) ||
+                    trip.imageUrl || undefined
+                  }
                   icon={received ? <DocCheckIcon size={17} /> : <DocAlertIcon size={17} />}
                   iconTone={received ? 'success' : 'danger'}
                   title={formatVehicleNumber(trip.vehicleNumber)}

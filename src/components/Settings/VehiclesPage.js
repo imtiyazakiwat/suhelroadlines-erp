@@ -78,7 +78,7 @@ const EMPTY = {
   // pre-ticking "mine" would put hired lorries in the wrong group by default.
   isOwn: false,
   isActive: true,
-  imageUrl: ''
+  images: []
 };
 
 /** Missing field means "never marked", which is not the same as "mine". */
@@ -172,7 +172,7 @@ const VehiclesPage = () => {
       vehicleType: vehicle.vehicleType || 'lorry',
       isOwn: isOwnVehicle(vehicle),
       isActive: vehicle.isActive !== false,
-      imageUrl: vehicle.imageUrl || ''
+      images: Array.isArray(vehicle.images) ? vehicle.images : (vehicle.imageUrl ? [vehicle.imageUrl] : [])
     });
   };
 
@@ -215,7 +215,7 @@ const VehiclesPage = () => {
         vehicleType: draft.vehicleType,
         isOwn: draft.isOwn === true,
         isActive: draft.isActive,
-        imageUrl: draft.imageUrl || ''
+        images: draft.images || []
       };
 
       if (draft.existing) {
@@ -340,7 +340,10 @@ const VehiclesPage = () => {
             {group.items.map((vehicle) => (
               <ListRow
                 key={vehicle.vehicleNumber}
-                thumbnail={vehicle.imageUrl || undefined}
+                thumbnail={
+                  (Array.isArray(vehicle.images) ? vehicle.images[0] : null) ||
+                  vehicle.imageUrl || undefined
+                }
                 icon={<TruckIcon size={17} />}
                 iconTone={vehicle.isActive === false ? 'neutral' : 'brand'}
                 /* Uppercased on the way out as well as on the way in: records
@@ -463,8 +466,8 @@ const VehiclesPage = () => {
             >
               <ListRow>
                 <ImagePicker
-                  value={draft.imageUrl}
-                  onChange={(url) => setField('imageUrl', url)}
+                  value={draft.images}
+                  onChange={(images) => setField('images', images)}
                   disabled={saving}
                 />
               </ListRow>

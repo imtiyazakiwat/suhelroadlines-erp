@@ -43,7 +43,7 @@ const AddAdvance = () => {
     amount: '',
     date: format(new Date(), 'yyyy-MM-dd'),
     note: '',
-    imageUrl: ''
+    images: []
   });
 
   const [vehicles, setVehicles] = useState([]);
@@ -176,7 +176,7 @@ const AddAdvance = () => {
         advanceAmount: amountValue,
         note: formData.note.trim(),
         advanceType: 'additional',
-        imageUrl: formData.imageUrl
+        images: formData.images
       });
 
       await advanceService.addAdvance(advanceData);
@@ -344,8 +344,8 @@ const AddAdvance = () => {
         </ListRow>
         <ListRow>
           <ImagePicker
-            value={formData.imageUrl}
-            onChange={(url) => setField('imageUrl', url)}
+            value={formData.images}
+            onChange={(images) => setField('images', images)}
             disabled={saving}
           />
         </ListRow>
